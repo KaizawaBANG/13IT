@@ -1,0 +1,460 @@
+﻿@page "/stockout"
+@layout MainLayout
+@using MauiApp2.Services
+@using MauiApp2.Models
+@inject IAuthService AuthService
+@inject IStockOutService StockOutService
+@inject IProductService ProductService
+@inject NavigationManager Navigation
+
+<link href="css/pagination.css" rel="stylesheet" />
+<link href="css/stockin-receive.css" rel="stylesheet" />
+
+<div class="dashboard-wrapper">
+    <Sidebar />
+    <div class="main-content">
+        <div class="content-header" style="flex-direction: column; align-items: flex-start;">
+            <h1>Stock Out</h1>
+            <p style="color: #6b7280; margin-top: 4px; margin-bottom: 0;">Remove stock from inventory for damaged, missing, or disposal items</p>
+        </div>
+
+        <div class="inventory-section">
+            <div class="product-table-container">
+                <!-- Error Alert -->
+                @if (!string.IsNullOrEmpty(errorMessage))
+                {
+                    <div class="alert alert-error">
+                        <span class="alert-icon"><i class="fas fa-exclamation-triangle"></i></span>
+                        <span>@errorMessage</span>
+                        <button class="alert-close" @onclick="ClearError"><i class="fas fa-times"></i></button>
+                    </div>
+                }
+
+                <!-- Success Alert -->
+                @if (!string.IsNullOrEmpty(successMessage))
+                {
+                    <div class="alert alert-success">
+                        <span class="alert-icon"><i class="fas fa-check-circle"></i></span>
+                        <span>@successMessage</span>
+                        <button class="alert-close" @onclick="ClearSuccess"><i class="fas fa-times"></i></button>
+                    </div>
+                }
+
+                <!-- Stock Out Form -->
+                <div class="stock-in-form">
+                    <div class="form-section">
+                        <h3>Record Stock Out</h3>
+                    
+                        <div class="form-group">
+                            <label>Product *</label>
+                            <select class="form-control @(HasError("Product") ? "input-error" : "")" value="@selectedProductId" @onchange="OnProductSelected">
+                                <option value="">Select Product</option>
+                                @foreach (var product in products)
+                                {
+                                    var availableStock = product.quantity ?? 0;
+                                    <option value="@product.product_id">@product.product_name (@product.product_sku) - Stock: @availableStock</option>
+                                }
+                            </select>
+                            @if (HasError("Product"))
+                            {
+                                <span class="field-error">@GetError("Product")</span>
+                            }
+                        </div>
+
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label>Quantity to Remove *</label>
+                                <input type="number" 
+                                       class="form-control @(HasError("Quantity") ? "input-error" : "")" 
+                                       @bind="quantity" 
+                                       @bind:event="oninput"
+                                       placeholder="Enter quantity" 
+                                       min="1" />
+                                @if (HasError("Quantity"))
+                                {
+                                    <span class="field-error">@GetError("Quantity")</span>
+                                }
+                                @if (selectedProductId != "" && quantity > 0 && int.TryParse(selectedProductId, out int checkProductId))
+                                {
+                                    var product = products.FirstOrDefault(p => p.product_id == checkProductId);
+                                    var availableStock = product?.quantity ?? 0;
+                                    if (product != null && quantity > availableStock)
+                                    {
+                                        <span class="field-error" style="color: #dc2626;">
+                                            <i class="fas fa-exclamation-circle"></i> 
+                                            Quantity exceeds available stock (@availableStock available)
+                                        </span>
+                                    }
+                                }
+                            </div>
+                            <div class="form-group">
+                                <label>Reason *</label>
+                                <select class="form-control @(HasError("Reason") ? "input-error" : "")" @bind="selectedReason">
+                                    <option value="">Select Reason</option>
+                                    <option value="Damaged">Damaged</option>
+                                    <option value="Missing">Missing</option>
+                                    <option value="Disposal">Disposal</option>
+                                    <option value="Other">Other</option>
+                                </select>
+                                @if (HasError("Reason"))
+                                {
+                                    <span class="field-error">@GetError("Reason")</span>
+                                }
+                            </div>
+                            <div class="form-group">
+                                <label>Date *</label>
+                                <input type="date" 
+                                       class="form-control @(HasError("Date") ? "input-error" : "")" 
+                                       @bind="stockOutDate" 
+                                       max="@DateTime.Now.ToString("yyyy-MM-dd")" />
+                                @if (HasError("Date"))
+                                {
+                                    <span class="field-error">@GetError("Date")</span>
+                                }
+                            </div>
+                        </div>
+
+                        <div class="form-group">
+                            <label>Remarks/Notes (Optional)</label>
+                            <textarea class="form-control" 
+                                      @bind="remarks" 
+                                      placeholder="Reason for stock out (e.g., Damaged during handling, Expired items, etc.)" 
+                                      rows="3"></textarea>
+                        </div>
+
+                        <div class="form-actions">
+                            <button class="btn-cancel" @onclick="CancelStockOut">Cancel</button>
+                            <button class="btn-submit" @onclick="ShowSubmitConfirmation" disabled="@(isSubmitting || !IsFormValid)">
+                                @if (isSubmitting)
+                                {
+                                    <span>Processing...</span>
+                                }
+                                else
+                                {
+                                    <span>Remove Stock</span>
+                                }
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Confirmation Modal -->
+@if (showSubmitConfirmation)
+{
+    <div class="modal-overlay" @onclick="CloseConfirmation">
+        <div class="modal-content" @onclick:stopPropagation="true">
+            <div class="modal-header">
+                <h3>Confirm Stock Out</h3>
+                <button class="modal-close" @onclick="CloseConfirmation"><i class="fas fa-times"></i></button>
+            </div>
+            <div class="modal-body">
+                <div class="alert alert-warning" style="margin-bottom: 20px;">
+                    <i class="fas fa-exclamation-triangle"></i>
+                    <span>Are you sure you want to remove this stock?</span>
+                </div>
+                <div style="padding: 15px; background-color: #f9fafb; border-radius: 8px; margin-bottom: 15px;">
+                    @if (int.TryParse(selectedProductId, out int confirmProductId))
+                    {
+                        var confirmProduct = products.FirstOrDefault(p => p.product_id == confirmProductId);
+                        <p><strong>Product:</strong> @(confirmProduct?.product_name ?? "N/A")</p>
+                        <p><strong>SKU:</strong> @(confirmProduct?.product_sku ?? "N/A")</p>
+                    }
+                    else
+                    {
+                        <p><strong>Product:</strong> N/A</p>
+                    }
+                    <p><strong>Quantity:</strong> @quantity</p>
+                    <p><strong>Reason:</strong> @GetReasonDisplayName(selectedReason)</p>
+                    <p><strong>Date:</strong> @stockOutDate.ToString("MM/dd/yyyy")</p>
+                    @if (!string.IsNullOrWhiteSpace(remarks))
+                    {
+                        <p><strong>Remarks:</strong> @remarks</p>
+                    }
+                </div>
+                <p style="color: #6b7280; font-size: 0.875rem;">This action will reduce the inventory quantity.</p>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-cancel" @onclick="CloseConfirmation">Cancel</button>
+                <button class="btn-submit" @onclick="ConfirmSubmitStockOut">Confirm Remove Stock</button>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private bool isSubmitting = false;
+    private bool showSubmitConfirmation = false;
+    private string errorMessage = "";
+    private string successMessage = "";
+    private List<string> validationErrors = new List<string>();
+
+    // Form fields
+    private string selectedProductId = "";
+    private string selectedReason = "";
+    private int quantity = 0;
+    private DateTime stockOutDate = DateTime.Now;
+    private string remarks = "";
+
+    // Data collections
+    private List<MauiApp2.Models.Product> products = new List<MauiApp2.Models.Product>();
+    private bool isLoading = false;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!AuthService.IsAuthenticated)
+        {
+            Navigation.NavigateTo("/");
+            return;
+        }
+        
+        await LoadData();
+    }
+
+    private async Task LoadData()
+    {
+        try
+        {
+            isLoading = true;
+            ClearError();
+            ClearSuccess();
+            
+            // Load products
+            products = await ProductService.GetProductsAsync();
+            
+            StateHasChanged();
+        }
+        catch (Exception ex)
+        {
+            ShowError($"Error loading data: {ex.Message}");
+        }
+        finally
+        {
+            isLoading = false;
+            StateHasChanged();
+        }
+    }
+
+    private void OnProductSelected(ChangeEventArgs e)
+    {
+        selectedProductId = e.Value?.ToString() ?? "";
+        StateHasChanged();
+    }
+
+    private bool IsFormValid
+    {
+        get
+        {
+            return !string.IsNullOrWhiteSpace(selectedProductId) &&
+                   quantity > 0 &&
+                   !string.IsNullOrWhiteSpace(selectedReason) &&
+                   stockOutDate <= DateTime.Now;
+        }
+    }
+
+    private void ShowSubmitConfirmation()
+    {
+        validationErrors = ValidateForm();
+        if (validationErrors.Any())
+        {
+            StateHasChanged();
+            return;
+        }
+
+        showSubmitConfirmation = true;
+        StateHasChanged();
+    }
+
+    private void CloseConfirmation()
+    {
+        showSubmitConfirmation = false;
+        StateHasChanged();
+    }
+
+    private async Task ConfirmSubmitStockOut()
+    {
+        showSubmitConfirmation = false;
+        await SubmitStockOut();
+    }
+
+    private async Task SubmitStockOut()
+    {
+        try
+        {
+            isSubmitting = true;
+            ClearValidationErrors();
+            ClearError();
+            ClearSuccess();
+            StateHasChanged();
+
+            // Validate form
+            validationErrors = ValidateForm();
+
+            if (validationErrors.Any())
+            {
+                StateHasChanged();
+                return;
+            }
+
+            // Validate product ID is numeric
+            if (!int.TryParse(selectedProductId, out int productId))
+            {
+                ShowError("Invalid product selected");
+                return;
+            }
+
+            // Get current user ID
+            if (!AuthService.IsAuthenticated || AuthService.CurrentUserId <= 0)
+            {
+                ShowError("User not authenticated");
+                return;
+            }
+
+            // Create stock out items list
+            var stockOutItems = new List<StockOutItem>
+            {
+                new StockOutItem
+                {
+                    product_id = productId,
+                    quantity = quantity,
+                    reason = selectedReason
+                }
+            };
+
+            // Call service to create stock out
+            var stockOutId = await StockOutService.CreateStandaloneStockOutAsync(
+                stockOutItems,
+                selectedReason,
+                string.IsNullOrWhiteSpace(remarks) ? null : remarks,
+                AuthService.CurrentUserId
+            );
+
+            // Show success message
+            var product = products.FirstOrDefault(p => p.product_id == productId);
+            var productName = product?.product_name ?? "Product";
+            ShowSuccess($"Successfully removed {quantity} units of {productName} from stock");
+
+            // Reset form
+            ResetForm();
+
+            // Reload products to refresh stock levels
+            await LoadData();
+        }
+        catch (Exception ex)
+        {
+            ShowError($"An error occurred while processing stock out: {ex.Message}");
+        }
+        finally
+        {
+            isSubmitting = false;
+            StateHasChanged();
+        }
+    }
+
+    private void CancelStockOut()
+    {
+        ResetForm();
+        Navigation.NavigateTo("/inventory-transactions");
+    }
+
+    private void ResetForm()
+    {
+        selectedProductId = "";
+        selectedReason = "";
+        quantity = 0;
+        stockOutDate = DateTime.Now;
+        remarks = "";
+        isSubmitting = false;
+        ClearValidationErrors();
+    }
+
+    private List<string> ValidateForm()
+    {
+        var errors = new List<string>();
+
+        if (string.IsNullOrWhiteSpace(selectedProductId))
+            errors.Add("Product: Please select a product");
+
+        if (quantity <= 0)
+            errors.Add("Quantity: Quantity must be greater than 0");
+
+        if (string.IsNullOrWhiteSpace(selectedReason))
+            errors.Add("Reason: Please select a reason");
+
+        if (stockOutDate > DateTime.Now)
+            errors.Add("Date: Stock out date cannot be in the future");
+
+        // Check stock availability
+        if (!string.IsNullOrEmpty(selectedProductId) && quantity > 0 && int.TryParse(selectedProductId, out int validateProductId))
+        {
+            var product = products.FirstOrDefault(p => p.product_id == validateProductId);
+            var availableStock = product?.quantity ?? 0;
+            if (product != null && quantity > availableStock)
+            {
+                errors.Add($"Quantity: Cannot remove {quantity} units. Only {availableStock} units available in stock.");
+            }
+        }
+
+        return errors;
+    }
+
+    private bool HasError(string fieldName)
+    {
+        return validationErrors.Any(e => e.StartsWith(fieldName + ":", StringComparison.OrdinalIgnoreCase));
+    }
+
+    private string GetError(string fieldName)
+    {
+        var error = validationErrors.FirstOrDefault(e => e.StartsWith(fieldName + ":", StringComparison.OrdinalIgnoreCase));
+        return error?.Substring(fieldName.Length + 1).Trim() ?? "";
+    }
+
+    private void ClearValidationErrors()
+    {
+        validationErrors.Clear();
+    }
+
+    private void ShowError(string message)
+    {
+        errorMessage = message;
+        successMessage = "";
+        StateHasChanged();
+    }
+
+    private void ShowSuccess(string message)
+    {
+        successMessage = message;
+        errorMessage = "";
+        StateHasChanged();
+    }
+
+    private void ClearError()
+    {
+        errorMessage = "";
+        StateHasChanged();
+    }
+
+    private void ClearSuccess()
+    {
+        successMessage = "";
+        StateHasChanged();
+    }
+
+    private string GetReasonDisplayName(string reason)
+    {
+        if (string.IsNullOrWhiteSpace(reason))
+            return "Unknown";
+            
+        return reason.ToLower() switch
+        {
+            "damaged" or "Damaged" => "Damaged",
+            "missing" or "Missing" => "Missing",
+            "disposal" or "Disposal" => "Disposal",
+            "other" or "Other" => "Other",
+            _ => reason
+        };
+    }
+}

@@ -1,0 +1,1714 @@
+@page "/customers"
+
+@layout MainLayout
+
+@using MauiApp2.Services
+
+@using MauiApp2.Models
+
+@using CustomerModel = MauiApp2.Models.Customer
+
+@using Microsoft.JSInterop
+
+@inject IAuthService AuthService
+
+@inject NavigationManager Navigation
+
+@inject ICustomerService CustomerService
+
+@inject IJSRuntime JSRuntime
+
+<link href="css/customer.css" rel="stylesheet" />
+
+<link href="css/pagination.css" rel="stylesheet" />
+
+<div class="dashboard-wrapper">
+
+    <Sidebar />
+
+    <div class="main-content">
+
+        <div class="content-header">
+            <h1>Customer Management</h1>
+        </div>
+
+        <div class="inventory-section">
+
+            <div class="product-table-container">
+
+                <!-- Alert Messages -->
+                @if (!string.IsNullOrEmpty(errorMessage))
+
+                {
+
+                    <div class="alert alert-error">
+
+                        <span class="alert-icon"><i class="fas fa-exclamation-triangle"></i></span>
+
+                        <span>@errorMessage</span>
+
+                        <button class="alert-close" @onclick="ClearErrorMessage"><i class="fas fa-times"></i></button>
+
+                    </div>
+
+                }
+
+                @if (!string.IsNullOrEmpty(successMessage))
+
+                {
+
+                    <div class="alert alert-success">
+
+                        <span class="alert-icon"><i class="fas fa-check-circle"></i></span>
+
+                        <span>@successMessage</span>
+
+                        <button class="alert-close" @onclick="ClearSuccessMessage"><i class="fas fa-times"></i></button>
+
+                    </div>
+
+                }
+
+                <!-- Loading Indicator -->
+                @if (isLoading)
+
+                {
+
+                    <div class="loading-indicator">
+
+                        <div class="spinner"></div>
+
+                        <span>Loading customers...</span>
+
+                    </div>
+
+                }
+
+                <div class="toolbar">
+
+                    <button class="add-item-btn" @onclick="ShowAddModal" disabled="@isLoading">
+                        <i class="fas fa-plus"></i>
+                        <span>Add Customer</span>
+                    </button>
+
+                    <div class="search-container">
+
+                        <input type="text"
+                               class="search-input"
+                               placeholder="Search customers..."
+                               value="@searchQuery"
+                               @oninput="OnSearchInput"
+                               disabled="@isLoading" />
+
+                        <span class="search-icon"><i class="fas fa-search"></i></span>
+
+                    </div>
+
+                </div>
+
+                <div class="table-wrapper">
+                    <table class="product-table">
+
+                    <thead>
+
+                        <tr>
+
+                            <th>Customer Name</th>
+
+                            <th>Contact Number</th>
+
+                            <th>Email</th>
+
+                            <th>Address</th>
+
+                            <th>Status</th>
+
+                            <th>Created Date</th>
+
+                            <th>Modified Date</th>
+
+                            <th>Actions</th>
+
+                        </tr>
+
+                    </thead>
+
+                    <tbody>
+
+                        @if (PaginatedCustomers.Any())
+
+                        {
+
+                            @foreach (var customer in PaginatedCustomers)
+
+                            {
+
+                                <tr>
+
+                                    <td class="product-name-cell">@customer.customer_name</td>
+
+                                    <td>
+
+                                        @if (!string.IsNullOrEmpty(customer.contact_number))
+
+                                        {
+
+                                            <span>@customer.contact_number</span>
+
+                                        }
+
+                                        else
+
+                                        {
+
+                                            <span class="no-data">-</span>
+
+                                        }
+
+                                    </td>
+
+                                    <td>
+
+                                        @if (!string.IsNullOrEmpty(customer.email))
+
+                                        {
+
+                                            <span>@customer.email</span>
+
+                                        }
+
+                                        else
+
+                                        {
+
+                                            <span class="no-data">-</span>
+
+                                        }
+
+                                    </td>
+
+                                    <td>
+
+                                        @if (!string.IsNullOrEmpty(customer.address))
+
+                                        {
+
+                                            <span>@customer.address</span>
+
+                                        }
+
+                                        else
+
+                                        {
+
+                                            <span class="no-data">-</span>
+
+                                        }
+
+                                    </td>
+
+                                    <td>
+
+                                        <span class="status-badge @(customer.is_active ? "status-active" : "status-inactive")">
+
+                                            @(customer.is_active ? "Active" : "Inactive")
+
+                                        </span>
+
+                                    </td>
+
+                                    <td>
+
+                                        @customer.created_date.ToString("MMM dd, yyyy")
+
+                                    </td>
+
+                                    <td>
+
+                                        @if (customer.modified_date.HasValue)
+
+                                        {
+
+                                            <span>@customer.modified_date.Value.ToString("MMM dd, yyyy")</span>
+
+                                        }
+
+                                        else
+
+                                        {
+
+                                            <span class="no-data">-</span>
+
+                                        }
+
+                                    </td>
+
+                                    <td>
+
+                                        <button class="edit-btn"
+                                                @onclick="() => ShowEditModal(customer)"
+                                                disabled="@isLoading">
+                                            <i class="fas fa-edit"></i>
+                                            <span>Edit</span>
+                                        </button>
+
+                                    </td>
+
+                                </tr>
+
+                            }
+
+                        }
+
+                        else if (!isLoading)
+
+                        {
+
+                            <tr>
+
+                                <td colspan="8" class="empty-state-cell">
+                                    <div class="empty-state">
+                                        <i class="fas fa-folder-open empty-state-icon"></i>
+                                        @if (string.IsNullOrWhiteSpace(searchQuery))
+                                        {
+                                            <p class="empty-state-text">No customers found. Click "Add Customer" to add your first customer.</p>
+                                        }
+                                        else
+                                        {
+                                            <p class="empty-state-text">No customers match your search criteria.</p>
+                                        }
+                                    </div>
+                                </td>
+
+                            </tr>
+
+                        }
+
+                    </tbody>
+
+                    </table>
+                </div>
+
+                <!-- Mobile Card View -->
+                <div class="customer-cards-container">
+                    @if (PaginatedCustomers.Any())
+                    {
+                        @foreach (var customer in PaginatedCustomers)
+                        {
+                            <div class="customer-card">
+                                <div class="customer-card-header">
+                                    <h3 class="customer-card-title">@customer.customer_name</h3>
+                                    <button class="edit-btn" @onclick="() => ShowEditModal(customer)" disabled="@isLoading">
+                                        <i class="fas fa-edit"></i>
+                                        <span>Edit</span>
+                                    </button>
+                                </div>
+                                <div class="customer-card-body">
+                                    <div class="customer-info-group">
+                                        <span class="customer-info-label">Contact Number</span>
+                                        <span class="customer-info-value">@(string.IsNullOrEmpty(customer.contact_number) ? "—" : customer.contact_number)</span>
+                                    </div>
+                                    <div class="customer-info-group">
+                                        <span class="customer-info-label">Email</span>
+                                        <span class="customer-info-value">@(string.IsNullOrEmpty(customer.email) ? "—" : customer.email)</span>
+                                    </div>
+                                    <div class="customer-info-group">
+                                        <span class="customer-info-label">Address</span>
+                                        <span class="customer-info-value">@(string.IsNullOrEmpty(customer.address) ? "—" : customer.address)</span>
+                                    </div>
+                                    <div class="customer-info-group">
+                                        <span class="customer-info-label">Status</span>
+                                        <span class="customer-info-value">
+                                            <span class="status-badge @(customer.is_active ? "status-active" : "status-inactive")">
+                                                @(customer.is_active ? "Active" : "Inactive")
+                                            </span>
+                                        </span>
+                                    </div>
+                                    <div class="customer-info-group">
+                                        <span class="customer-info-label">Created Date</span>
+                                        <span class="customer-info-value">@customer.created_date.ToString("MMM dd, yyyy")</span>
+                                    </div>
+                                    @if (customer.modified_date.HasValue)
+                                    {
+                                        <div class="customer-info-group">
+                                            <span class="customer-info-label">Modified Date</span>
+                                            <span class="customer-info-value">@customer.modified_date.Value.ToString("MMM dd, yyyy")</span>
+                                        </div>
+                                    }
+                                </div>
+                            </div>
+                        }
+                    }
+                    else if (!isLoading)
+                    {
+                        <div class="empty-state">
+                            <i class="fas fa-folder-open empty-state-icon"></i>
+                            @if (string.IsNullOrWhiteSpace(searchQuery))
+                            {
+                                <p class="empty-state-text">No customers found. Click "Add Customer" to add your first customer.</p>
+                            }
+                            else
+                            {
+                                <p class="empty-state-text">No customers match your search criteria.</p>
+                            }
+                        </div>
+                    }
+                </div>
+
+                <!-- Pagination -->
+                @if (FilteredCustomers.Any())
+
+                {
+
+                    <Pagination CurrentPage="@currentPage"
+                                PageSize="@pageSize"
+                                TotalItems="@FilteredCustomers.Count()"
+                                PageChanged="@OnPageChanged"
+                                PageSizeChanged="@OnPageSizeChanged" />
+
+                }
+
+            </div>
+
+        </div>
+
+    </div>
+
+</div>
+
+<!-- Add Customer Modal -->
+@if (showAddModal)
+
+{
+
+    <div class="modal-overlay">
+
+        <div class="modal-content" @onclick:stopPropagation="true">
+
+            <div class="modal-header add-modal-header">
+
+                <h3>
+                    <i class="fas fa-user-plus"></i>
+                    Add New Customer
+                </h3>
+
+                <button class="modal-close" @onclick="ShowCancelAddModal"><i class="fas fa-times"></i></button>
+
+            </div>
+
+            <div class="modal-body">
+
+
+                <div class="form-container">
+
+                    <div class="form-group">
+
+                        <label>Customer Name *</label>
+
+                        <input type="text"
+                               class="form-control @(hasAttemptedSubmit && HasError("CustomerName") ? "input-error" : "")"
+                               @bind="newCustomerName"
+                               @bind:event="oninput"
+                               placeholder="Enter customer name"
+                               maxlength="100"
+                               disabled="@isLoading" />
+
+                        @if (hasAttemptedSubmit && HasError("CustomerName"))
+
+                        {
+
+                            <span class="field-error">@GetError("CustomerName")</span>
+
+                        }
+
+                    </div>
+
+                    <div class="form-group">
+
+                        <label>Contact Number</label>
+
+                        <div class="phone-input-wrapper">
+
+                            <span class="phone-prefix">+63</span>
+
+                            <input type="tel"
+                                   class="form-control phone-input"
+                                   value="@GetDisplayPhoneNumber(newContactNumber)"
+                                   @oninput="(e) => OnNewContactNumberInput(e)"
+                                   placeholder="9123456789"
+                                   maxlength="10"
+                                   disabled="@isLoading" />
+
+                        </div>
+
+                        <small class="form-help">Enter 10 digits (e.g., 9123456789)</small>
+
+                    </div>
+
+                    <div class="form-group">
+
+                        <label>Email</label>
+
+                        <input type="email"
+                               class="form-control @(hasAttemptedSubmit && HasError("Email") ? "input-error" : "")"
+                               @bind="newEmail"
+                               placeholder="Enter email address (optional)"
+                               maxlength="100"
+                               disabled="@isLoading" />
+
+                        @if (hasAttemptedSubmit && HasError("Email"))
+
+                        {
+
+                            <span class="field-error">@GetError("Email")</span>
+
+                        }
+
+                    </div>
+
+                    <div class="form-group">
+
+                        <label>Address</label>
+
+                        <textarea class="form-control"
+                                  @bind="newAddress"
+                                  placeholder="Enter customer address (optional)"
+                                  rows="3"
+                                  maxlength="500"
+                                  disabled="@isLoading"></textarea>
+
+                    </div>
+
+                </div>
+
+            </div>
+
+            <div class="modal-footer">
+
+                <button class="btn-cancel" @onclick="ShowCancelAddModal" disabled="@isLoading">Cancel</button>
+
+                <button class="btn-submit" @onclick="ShowAddCustomerConfirmation" disabled="@(isLoading || !IsAddFormReady)">
+
+                    @if (isLoading)
+
+                    {
+
+                        <span class="button-spinner"></span>
+
+                    }
+
+                    Add Customer
+
+                </button>
+
+            </div>
+
+        </div>
+
+    </div>
+
+}
+
+<!-- Edit Customer Modal -->
+@if (showEditModal && editingCustomer != null)
+
+{
+
+    <div class="modal-overlay">
+
+        <div class="modal-content" @onclick:stopPropagation="true">
+
+            <div class="modal-header edit-modal-header">
+
+                <h3>
+                    <i class="fas fa-user-edit"></i>
+                    Edit Customer
+                </h3>
+
+                <button class="modal-close" @onclick="ShowCancelEditModal"><i class="fas fa-times"></i></button>
+
+            </div>
+
+            <div class="modal-body">
+
+
+                <div class="form-container">
+
+                    <div class="form-group">
+
+                        <label>Customer Name *</label>
+
+                        <input type="text"
+                               class="form-control @(hasAttemptedEditSubmit && HasEditError("CustomerName") ? "input-error" : "")"
+                               @bind="editCustomerName"
+                               @bind:event="oninput"
+                               placeholder="Enter customer name"
+                               maxlength="100"
+                               disabled="@isLoading" />
+
+                        @if (hasAttemptedEditSubmit && HasEditError("CustomerName"))
+
+                        {
+
+                            <span class="field-error">@GetEditError("CustomerName")</span>
+
+                        }
+
+                    </div>
+
+                    <div class="form-group">
+
+                        <label>Contact Number</label>
+
+                        <div class="phone-input-wrapper">
+
+                            <span class="phone-prefix">+63</span>
+
+                            <input type="tel"
+                                   class="form-control phone-input"
+                                   value="@GetDisplayPhoneNumber(editContactNumber)"
+                                   @oninput="(e) => OnEditContactNumberInput(e)"
+                                   placeholder="9123456789"
+                                   maxlength="10"
+                                   disabled="@isLoading" />
+
+                        </div>
+
+                        <small class="form-help">Enter 10 digits (e.g., 9123456789)</small>
+
+                    </div>
+
+                    <div class="form-group">
+
+                        <label>Email</label>
+
+                        <input type="email"
+                               class="form-control @(hasAttemptedEditSubmit && HasEditError("Email") ? "input-error" : "")"
+                               @bind="editEmail"
+                               placeholder="Enter email address (optional)"
+                               maxlength="100"
+                               disabled="@isLoading" />
+
+                        @if (hasAttemptedEditSubmit && HasEditError("Email"))
+
+                        {
+
+                            <span class="field-error">@GetEditError("Email")</span>
+
+                        }
+
+                    </div>
+
+                    <div class="form-group">
+
+                        <label>Address</label>
+
+                        <textarea class="form-control"
+                                  @bind="editAddress"
+                                  placeholder="Enter customer address (optional)"
+                                  rows="3"
+                                  maxlength="500"
+                                  disabled="@isLoading"></textarea>
+
+                    </div>
+
+                    <div class="form-group">
+
+                        <label>Status *</label>
+
+                        <div class="select-wrapper">
+                        <select class="form-control"
+                                value="@(editIsActive.ToString().ToLower())"
+                                @onchange="OnEditStatusChanged"
+                                disabled="@isLoading">
+
+                            <option value="true">Active</option>
+
+                            <option value="false">Inactive</option>
+
+                        </select>
+                            <i class="fas fa-chevron-down select-icon"></i>
+                        </div>
+
+                    </div>
+
+                </div>
+
+            </div>
+
+            <div class="modal-footer">
+
+                <button class="btn-cancel" @onclick="ShowCancelEditModal" disabled="@isLoading">Cancel</button>
+
+                <button class="btn-submit" @onclick="ShowUpdateCustomerConfirmation" disabled="@(isLoading || !IsEditFormReady)">
+
+                    @if (isLoading)
+
+                    {
+
+                        <span class="button-spinner"></span>
+
+                    }
+
+                    Update Customer
+
+                </button>
+
+            </div>
+
+        </div>
+
+    </div>
+
+}
+
+<!-- Confirmation Modal for Add Customer -->
+@if (showAddCustomerConfirmation)
+{
+    <div class="modal-overlay confirmation-modal-overlay">
+        <div class="modal-content confirmation-modal" @onclick:stopPropagation="true">
+            <div class="modal-header confirmation-modal-header">
+                <h3>Confirm Add Customer</h3>
+                <button class="modal-close" @onclick="CloseAddCustomerConfirmation"><i class="fas fa-times"></i></button>
+            </div>
+            <div class="modal-body confirmation-modal-body">
+                <div class="confirmation-message-box">
+                    <p class="confirmation-question">Are you sure you want to add this customer?</p>
+                </div>
+                <div class="confirmation-details">
+                    <div class="confirmation-detail-item">
+                        <span class="confirmation-label">Customer Name:</span>
+                        <span class="confirmation-value">@newCustomerName</span>
+                    </div>
+                    <div class="confirmation-detail-item">
+                        <span class="confirmation-label">Contact Number:</span>
+                        <span class="confirmation-value">@(string.IsNullOrWhiteSpace(newContactNumber) ? "N/A" : newContactNumber)</span>
+                    </div>
+                    <div class="confirmation-detail-item">
+                        <span class="confirmation-label">Email:</span>
+                        <span class="confirmation-value">@(string.IsNullOrWhiteSpace(newEmail) ? "N/A" : newEmail)</span>
+                    </div>
+                    <div class="confirmation-detail-item">
+                        <span class="confirmation-label">Address:</span>
+                        <span class="confirmation-value">@(string.IsNullOrWhiteSpace(newAddress) ? "N/A" : newAddress)</span>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer confirmation-modal-footer">
+                <button class="btn-cancel" @onclick="CloseAddCustomerConfirmation">Cancel</button>
+                <button class="btn-submit confirmation-submit-btn" @onclick="ConfirmAddCustomer">Confirm Add</button>
+            </div>
+        </div>
+    </div>
+}
+
+<!-- Confirmation Modal for Update Customer -->
+@if (showUpdateCustomerConfirmation)
+{
+    <div class="modal-overlay confirmation-modal-overlay">
+        <div class="modal-content confirmation-modal" @onclick:stopPropagation="true">
+            <div class="modal-header confirmation-modal-header">
+                <h3>Confirm Update Customer</h3>
+                <button class="modal-close" @onclick="CloseUpdateCustomerConfirmation"><i class="fas fa-times"></i></button>
+            </div>
+            <div class="modal-body confirmation-modal-body">
+                <div class="confirmation-message-box">
+                    <p class="confirmation-question">Are you sure you want to update this customer?</p>
+                </div>
+                <div class="confirmation-details">
+                    <div class="confirmation-detail-item">
+                        <span class="confirmation-label">Customer Name:</span>
+                        <span class="confirmation-value">@editCustomerName</span>
+                    </div>
+                    <div class="confirmation-detail-item">
+                        <span class="confirmation-label">Contact Number:</span>
+                        <span class="confirmation-value">@(string.IsNullOrWhiteSpace(editContactNumber) ? "N/A" : editContactNumber)</span>
+                    </div>
+                    <div class="confirmation-detail-item">
+                        <span class="confirmation-label">Email:</span>
+                        <span class="confirmation-value">@(string.IsNullOrWhiteSpace(editEmail) ? "N/A" : editEmail)</span>
+                    </div>
+                    <div class="confirmation-detail-item">
+                        <span class="confirmation-label">Address:</span>
+                        <span class="confirmation-value">@(string.IsNullOrWhiteSpace(editAddress) ? "N/A" : editAddress)</span>
+                    </div>
+                    <div class="confirmation-detail-item">
+                        <span class="confirmation-label">Status:</span>
+                        <span class="confirmation-value">@(editIsActive ? "Active" : "Inactive")</span>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer confirmation-modal-footer">
+                <button class="btn-cancel" @onclick="CloseUpdateCustomerConfirmation">Cancel</button>
+                <button class="btn-submit confirmation-submit-btn" @onclick="ConfirmUpdateCustomer">Confirm Update</button>
+            </div>
+        </div>
+    </div>
+}
+
+<!-- Cancellation Modal for Add Customer -->
+@if (showCancelAddModal)
+{
+    <div class="modal-overlay cancellation-modal-overlay">
+        <div class="modal-content cancellation-modal" @onclick:stopPropagation="true">
+            <div class="modal-header cancellation-modal-header">
+                <h3>
+                    <i class="fas fa-exclamation-triangle"></i>
+                    Cancel Add Customer?
+                </h3>
+                <button class="modal-close" @onclick="CloseCancelAddModal"><i class="fas fa-times"></i></button>
+            </div>
+            <div class="modal-body cancellation-modal-body">
+                <div class="cancellation-icon-container">
+                    <i class="fas fa-question-circle cancellation-icon"></i>
+                </div>
+                <p class="cancellation-message">Are you sure you want to cancel? All unsaved changes will be lost.</p>
+            </div>
+            <div class="modal-footer cancellation-modal-footer">
+                <button class="btn-cancel" @onclick="CloseCancelAddModal">No, Continue Editing</button>
+                <button class="btn-submit cancellation-btn" @onclick="ConfirmCancelAddModal">Yes, Cancel</button>
+            </div>
+        </div>
+    </div>
+}
+
+<!-- Cancellation Modal for Edit Customer -->
+@if (showCancelEditModal)
+{
+    <div class="modal-overlay cancellation-modal-overlay">
+        <div class="modal-content cancellation-modal" @onclick:stopPropagation="true">
+            <div class="modal-header cancellation-modal-header">
+                <h3>
+                    <i class="fas fa-exclamation-triangle"></i>
+                    Cancel Edit Customer?
+                </h3>
+                <button class="modal-close" @onclick="CloseCancelEditModal"><i class="fas fa-times"></i></button>
+            </div>
+            <div class="modal-body cancellation-modal-body">
+                <div class="cancellation-icon-container">
+                    <i class="fas fa-question-circle cancellation-icon"></i>
+                </div>
+                <p class="cancellation-message">Are you sure you want to cancel? All unsaved changes will be lost.</p>
+            </div>
+            <div class="modal-footer cancellation-modal-footer">
+                <button class="btn-cancel" @onclick="CloseCancelEditModal">No, Continue Editing</button>
+                <button class="btn-submit cancellation-btn" @onclick="ConfirmCancelEditModal">Yes, Cancel</button>
+            </div>
+        </div>
+    </div>
+}
+
+<!-- Success Modal -->
+@if (showSuccessModal)
+{
+    <div class="modal-overlay success-modal-overlay">
+        <div class="modal-content success-modal" @onclick:stopPropagation="true">
+            <div class="modal-header success-modal-header">
+                <h3>
+                    <i class="fas fa-check-circle"></i>
+                    Success!
+                </h3>
+                <button class="modal-close" @onclick="CloseSuccessModal"><i class="fas fa-times"></i></button>
+            </div>
+            <div class="modal-body success-modal-body">
+                <div class="success-icon-container">
+                    <i class="fas fa-check-circle success-icon"></i>
+                </div>
+                <p class="success-message">@successModalMessage</p>
+            </div>
+            <div class="modal-footer success-modal-footer">
+                <button class="btn-submit" @onclick="CloseSuccessModal">OK</button>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+
+    private string searchQuery = "";
+
+    private List<CustomerModel> customers = new();
+
+    private bool showAddModal = false;
+
+    private bool showEditModal = false;
+
+    private bool showAddCustomerConfirmation = false;
+
+    private bool showUpdateCustomerConfirmation = false;
+
+    private bool showCancelAddModal = false;
+
+    private bool showCancelEditModal = false;
+
+    private bool showSuccessModal = false;
+
+    private string successModalMessage = "";
+
+    private CustomerModel? editingCustomer = null;
+
+    private bool isLoading = false;
+
+    // Track submit attempts for validation display
+
+    private bool hasAttemptedSubmit = false;
+
+    private bool hasAttemptedEditSubmit = false;
+
+    // Add form fields
+
+    private string newCustomerName = "";
+
+    private string newContactNumber = "";
+
+    private string newEmail = "";
+
+    private string newAddress = "";
+
+    // Edit form fields
+
+    private string editCustomerName = "";
+
+    private string editContactNumber = "";
+
+    private string editEmail = "";
+
+    private string editAddress = "";
+
+    private bool editIsActive = true;
+
+    // Messages and validation
+
+    private string errorMessage = "";
+
+    private string successMessage = "";
+
+    private List<string> validationErrors = new List<string>();
+
+    private List<string> editValidationErrors = new List<string>();
+
+    // Pagination
+
+    private int currentPage = 1;
+
+    private int pageSize = 10;
+
+    protected override async Task OnInitializedAsync()
+
+    {
+
+        if (!AuthService.IsAuthenticated)
+
+        {
+
+            Navigation.NavigateTo("/");
+
+            return;
+
+        }
+
+        await LoadCustomers();
+
+    }
+
+    private async Task LoadCustomers()
+
+    {
+
+        try
+
+        {
+
+            isLoading = true;
+
+            errorMessage = "";
+
+            StateHasChanged();
+
+            var allCustomers = await CustomerService.GetCustomersAsync();
+            customers = allCustomers.OrderBy(s => s.customer_id).ToList();
+
+        }
+
+        catch (Exception ex)
+
+        {
+
+            errorMessage = $"Error loading customers: {ex.Message}";
+
+            Console.WriteLine($"Error: {ex.Message}");
+
+        }
+
+        finally
+
+        {
+
+            isLoading = false;
+
+            StateHasChanged();
+
+        }
+
+    }
+
+    private IEnumerable<CustomerModel> FilteredCustomers
+
+    {
+
+        get
+
+        {
+
+            var filtered = string.IsNullOrWhiteSpace(searchQuery)
+                ? customers
+                : customers.Where(s =>
+                    s.customer_name.Contains(searchQuery, StringComparison.OrdinalIgnoreCase) ||
+                    (s.contact_number != null && s.contact_number.Contains(searchQuery, StringComparison.OrdinalIgnoreCase)) ||
+                    (s.email != null && s.email.Contains(searchQuery, StringComparison.OrdinalIgnoreCase)) ||
+                    (s.address != null && s.address.Contains(searchQuery, StringComparison.OrdinalIgnoreCase)) ||
+                    s.customer_id.ToString().Contains(searchQuery, StringComparison.OrdinalIgnoreCase));
+
+            return filtered.OrderByDescending(s => s.created_date).ThenBy(s => s.customer_id);
+
+        }
+
+    }
+
+    private IEnumerable<CustomerModel> PaginatedCustomers
+
+    {
+
+        get
+
+        {
+
+            var filtered = FilteredCustomers.ToList();
+
+            return filtered.Skip((currentPage - 1) * pageSize).Take(pageSize);
+
+        }
+
+    }
+
+    private void OnPageChanged(int page)
+
+    {
+
+        currentPage = page;
+
+        StateHasChanged();
+
+    }
+
+    private void OnPageSizeChanged(int newPageSize)
+
+    {
+
+        pageSize = newPageSize;
+
+        currentPage = 1;
+
+        StateHasChanged();
+
+    }
+
+    private void OnSearchInput(ChangeEventArgs e)
+
+    {
+
+        searchQuery = e.Value?.ToString() ?? "";
+
+        currentPage = 1;
+
+    }
+
+
+    private void OnEditStatusChanged(ChangeEventArgs e)
+
+    {
+
+        editIsActive = e.Value?.ToString() == "true";
+
+        StateHasChanged();
+
+    }
+
+    // Phone number input handlers
+
+    private void OnNewContactNumberInput(ChangeEventArgs e)
+
+    {
+
+        var input = e.Value?.ToString() ?? "";
+
+        newContactNumber = FormatPhoneNumber(input);
+
+        StateHasChanged();
+
+    }
+
+    private void OnEditContactNumberInput(ChangeEventArgs e)
+
+    {
+
+        var input = e.Value?.ToString() ?? "";
+
+        editContactNumber = FormatPhoneNumber(input);
+
+        StateHasChanged();
+
+    }
+
+    private string FormatPhoneNumber(string input)
+
+    {
+
+        if (string.IsNullOrWhiteSpace(input))
+
+            return "";
+
+        // Remove all non-digit characters
+
+        var digits = new string(input.Where(char.IsDigit).ToArray());
+
+        // Limit to 10 digits (Philippines mobile numbers)
+
+        if (digits.Length > 10)
+
+            digits = digits.Substring(0, 10);
+
+        return digits;
+
+    }
+
+    private string GetDisplayPhoneNumber(string phoneNumber)
+
+    {
+
+        if (string.IsNullOrWhiteSpace(phoneNumber))
+
+            return "";
+
+        // Remove +63 if already present
+
+        var digits = phoneNumber.Replace("+63", "").Trim();
+
+        // Remove all non-digit characters
+
+        digits = new string(digits.Where(char.IsDigit).ToArray());
+
+        // Limit to 10 digits
+
+        if (digits.Length > 10)
+
+            digits = digits.Substring(0, 10);
+
+        return digits;
+
+    }
+
+    private string GetFullPhoneNumber(string phoneNumber)
+
+    {
+
+        if (string.IsNullOrWhiteSpace(phoneNumber))
+
+            return "";
+
+        var digits = GetDisplayPhoneNumber(phoneNumber);
+
+        return string.IsNullOrWhiteSpace(digits) ? "" : $"+63{digits}";
+
+    }
+
+    // Modal Methods
+
+    private void ShowAddModal()
+
+    {
+
+        showAddModal = true;
+
+        hasAttemptedSubmit = false; // Reset submit attempt flag
+
+        ClearMessages();
+
+        ResetAddForm();
+
+        StateHasChanged();
+
+    }
+
+    private void CloseAddModal()
+
+    {
+
+        showAddModal = false;
+
+        hasAttemptedSubmit = false; // Reset submit attempt flag
+
+        ResetAddForm();
+
+        StateHasChanged();
+
+    }
+
+    private void ShowCancelAddModal()
+    {
+        showCancelAddModal = true;
+        StateHasChanged();
+    }
+
+    private void CloseCancelAddModal()
+    {
+        showCancelAddModal = false;
+        StateHasChanged();
+    }
+
+    private void ConfirmCancelAddModal()
+    {
+        showCancelAddModal = false;
+        CloseAddModal();
+    }
+
+    private void ShowEditModal(CustomerModel customer)
+
+    {
+
+        editingCustomer = customer;
+
+        showEditModal = true;
+
+        hasAttemptedEditSubmit = false; // Reset submit attempt flag
+
+        ClearMessages();
+
+        // Populate edit form
+
+            editCustomerName = customer.customer_name;
+            editAddress = customer.address ?? "";
+
+        // Extract digits from contact number (remove +63 prefix if present)
+
+        editContactNumber = GetDisplayPhoneNumber(customer.contact_number ?? "");
+
+        editEmail = customer.email ?? "";
+        editAddress = customer.address ?? "";
+
+        editIsActive = customer.is_active;
+
+        StateHasChanged();
+
+    }
+
+    private void CloseEditModal()
+
+    {
+
+        showEditModal = false;
+
+        editingCustomer = null;
+
+        hasAttemptedEditSubmit = false; // Reset submit attempt flag
+
+        ResetEditForm();
+
+        StateHasChanged();
+
+    }
+
+    private void ShowCancelEditModal()
+    {
+        showCancelEditModal = true;
+        StateHasChanged();
+    }
+
+    private void CloseCancelEditModal()
+    {
+        showCancelEditModal = false;
+        StateHasChanged();
+    }
+
+    private void ConfirmCancelEditModal()
+    {
+        showCancelEditModal = false;
+        CloseEditModal();
+    }
+
+    private void CloseSuccessModal()
+    {
+        showSuccessModal = false;
+        StateHasChanged();
+    }
+
+    // Form Methods
+
+    private void ResetAddForm()
+
+    {
+
+        newCustomerName = "";
+
+        newContactNumber = "";
+
+        newEmail = "";
+        newAddress = "";
+
+        validationErrors.Clear();
+
+        hasAttemptedSubmit = false;
+
+    }
+
+    private void ResetEditForm()
+
+    {
+
+        editCustomerName = "";
+
+        editContactNumber = "";
+
+        editEmail = "";
+        editAddress = "";
+
+        editIsActive = true;
+
+        editValidationErrors.Clear();
+
+        hasAttemptedEditSubmit = false;
+
+    }
+
+    private void ClearMessages()
+
+    {
+
+        errorMessage = "";
+
+        successMessage = "";
+
+        validationErrors.Clear();
+
+        editValidationErrors.Clear();
+
+    }
+
+    private void ClearErrorMessage() => errorMessage = "";
+
+    private void ClearSuccessMessage() => successMessage = "";
+
+    // Validation Methods
+
+    private void ValidateAddForm()
+
+    {
+
+        validationErrors.Clear();
+
+        if (string.IsNullOrWhiteSpace(newCustomerName))
+
+            AddValidationError("CustomerName", "Customer name is required");
+
+        else if (newCustomerName.Trim().Length < 2)
+
+            AddValidationError("CustomerName", "Customer name must be at least 2 characters long");
+
+        else if (customers.Any(s => s.customer_name.Equals(newCustomerName.Trim(), StringComparison.OrdinalIgnoreCase)))
+
+            AddValidationError("CustomerName", "Customer name already exists");
+
+        if (!string.IsNullOrWhiteSpace(newEmail) && !IsValidEmail(newEmail))
+
+            AddValidationError("Email", "Please enter a valid email address");
+
+    }
+
+    private void ValidateEditForm()
+
+    {
+
+        editValidationErrors.Clear();
+
+        if (string.IsNullOrWhiteSpace(editCustomerName))
+
+            AddEditValidationError("CustomerName", "Customer name is required");
+
+        else if (editCustomerName.Trim().Length < 2)
+
+            AddEditValidationError("CustomerName", "Customer name must be at least 2 characters long");
+
+        else if (customers.Any(s => s.customer_name.Equals(editCustomerName.Trim(), StringComparison.OrdinalIgnoreCase) && s.customer_id != editingCustomer?.customer_id))
+
+            AddEditValidationError("CustomerName", "Customer name already exists");
+
+        if (!string.IsNullOrWhiteSpace(editEmail) && !IsValidEmail(editEmail))
+
+            AddEditValidationError("Email", "Please enter a valid email address");
+
+    }
+
+    private bool IsValidEmail(string email)
+
+    {
+
+        try
+
+        {
+
+            var addr = new System.Net.Mail.MailAddress(email);
+
+            return addr.Address == email;
+
+        }
+
+        catch
+
+        {
+
+            return false;
+
+        }
+
+    }
+
+    private void AddValidationError(string field, string message)
+
+    {
+
+        validationErrors.Add($"{field}: {message}");
+
+    }
+
+    private void AddEditValidationError(string field, string message)
+
+    {
+
+        editValidationErrors.Add($"{field}: {message}");
+
+    }
+
+    private bool HasError(string field)
+
+    {
+
+        return validationErrors.Any(error => error.StartsWith($"{field}:"));
+
+    }
+
+    private bool HasEditError(string field)
+
+    {
+
+        return editValidationErrors.Any(error => error.StartsWith($"{field}:"));
+
+    }
+
+    private string GetError(string field)
+
+    {
+
+        return validationErrors.FirstOrDefault(error => error.StartsWith($"{field}:"))?.Split(':')[1]?.Trim() ?? "";
+
+    }
+
+    private string GetEditError(string field)
+
+    {
+
+        return editValidationErrors.FirstOrDefault(error => error.StartsWith($"{field}:"))?.Split(':')[1]?.Trim() ?? "";
+
+    }
+
+    private bool IsFormValid
+
+    {
+
+        get
+
+        {
+
+            // Only validate if user has attempted to submit
+
+            if (!hasAttemptedSubmit)
+
+                return true;
+
+            ValidateAddForm();
+
+            return validationErrors.Count == 0 && !string.IsNullOrWhiteSpace(newCustomerName);
+
+        }
+
+    }
+
+    private bool IsEditFormValid
+
+    {
+
+        get
+
+        {
+
+            // Only validate if user has attempted to submit
+
+            if (!hasAttemptedEditSubmit)
+
+                return true;
+
+            ValidateEditForm();
+
+            return editValidationErrors.Count == 0 && !string.IsNullOrWhiteSpace(editCustomerName);
+
+        }
+
+    }
+
+    // Check if Add form is ready (required fields filled)
+    private bool IsAddFormReady
+    {
+        get
+        {
+            return !string.IsNullOrWhiteSpace(newCustomerName);
+        }
+    }
+
+    // Check if Edit form is ready (required fields filled)
+    private bool IsEditFormReady
+    {
+        get
+        {
+            return !string.IsNullOrWhiteSpace(editCustomerName);
+        }
+    }
+
+    // Confirmation Modal Methods
+    private void ShowAddCustomerConfirmation()
+    {
+        Console.WriteLine("ShowAddCustomerConfirmation called");
+        hasAttemptedSubmit = true;
+        errorMessage = "";
+        validationErrors.Clear();
+        StateHasChanged();
+
+        ValidateAddForm();
+
+        if (validationErrors.Any())
+        {
+            errorMessage = "Please fix the validation errors before submitting.";
+            Console.WriteLine($"Validation failed. Errors: {string.Join(", ", validationErrors)}");
+            StateHasChanged();
+            return;
+        }
+
+        Console.WriteLine("Validation passed, showing confirmation modal");
+        showAddCustomerConfirmation = true;
+        StateHasChanged();
+    }
+
+    private void CloseAddCustomerConfirmation()
+    {
+        showAddCustomerConfirmation = false;
+        StateHasChanged();
+    }
+
+    private void ShowUpdateCustomerConfirmation()
+    {
+        hasAttemptedEditSubmit = true;
+        errorMessage = "";
+        editValidationErrors.Clear();
+        StateHasChanged();
+
+        ValidateEditForm();
+
+        if (editValidationErrors.Any())
+        {
+            errorMessage = "Please fix the validation errors before submitting.";
+            StateHasChanged();
+            return;
+        }
+
+        if (editingCustomer == null)
+        {
+            errorMessage = "Error: No customer selected for editing.";
+            StateHasChanged();
+            return;
+        }
+
+        showUpdateCustomerConfirmation = true;
+        StateHasChanged();
+    }
+
+    private void CloseUpdateCustomerConfirmation()
+    {
+        showUpdateCustomerConfirmation = false;
+        StateHasChanged();
+    }
+
+    // CRUD Operations
+
+    private async Task ConfirmAddCustomer()
+    {
+        Console.WriteLine("ConfirmAddCustomer called");
+        showAddCustomerConfirmation = false;
+        StateHasChanged();
+        await AddCustomer();
+    }
+
+    private async Task AddCustomer()
+
+    {
+
+        try
+
+        {
+
+            isLoading = true;
+
+            StateHasChanged();
+
+            var newCustomer = new CustomerModel
+
+            {
+
+                customer_name = newCustomerName.Trim(),
+
+                contact_number = string.IsNullOrWhiteSpace(newContactNumber) ? null : GetFullPhoneNumber(newContactNumber),
+
+                email = string.IsNullOrWhiteSpace(newEmail) ? null : newEmail.Trim(),
+
+                address = string.IsNullOrWhiteSpace(newAddress) ? null : newAddress.Trim(),
+
+                is_active = true,
+
+                created_date = DateTime.Now
+
+            };
+
+            var customerId = await CustomerService.CreateCustomerAsync(newCustomer);
+
+            await LoadCustomers(); // Refresh the list
+
+            CloseAddModal();
+
+            await Task.Delay(100);
+
+            successModalMessage = $"Customer '{newCustomerName}' added successfully!";
+            showSuccessModal = true;
+            StateHasChanged();
+
+        }
+
+        catch (Exception ex)
+
+        {
+
+            errorMessage = $"Error adding customer: {ex.Message}";
+
+            Console.WriteLine($"AddCustomer error: {ex}");
+
+            // Keep the add modal open if there's an error
+            // Don't close it so user can see the error and retry
+
+        }
+
+        finally
+
+        {
+
+            isLoading = false;
+
+            StateHasChanged();
+
+        }
+
+    }
+
+    private async Task ConfirmUpdateCustomer()
+    {
+        showUpdateCustomerConfirmation = false;
+        await UpdateCustomer();
+    }
+
+    private async Task UpdateCustomer()
+
+    {
+
+        try
+
+        {
+
+            isLoading = true;
+
+            StateHasChanged();
+
+            var updatedCustomer = new CustomerModel
+
+            {
+
+                customer_id = editingCustomer.customer_id,
+
+                customer_name = editCustomerName.Trim(),
+
+                contact_number = string.IsNullOrWhiteSpace(editContactNumber) ? null : GetFullPhoneNumber(editContactNumber),
+
+                email = string.IsNullOrWhiteSpace(editEmail) ? null : editEmail.Trim(),
+
+                address = string.IsNullOrWhiteSpace(editAddress) ? null : editAddress.Trim(),
+
+                is_active = editIsActive,
+
+                created_date = editingCustomer.created_date
+
+            };
+
+            var success = await CustomerService.UpdateCustomerAsync(updatedCustomer);
+
+            if (success)
+
+            {
+
+                await LoadCustomers(); // Refresh the list
+
+                CloseEditModal();
+
+                await Task.Delay(100);
+
+                successModalMessage = $"Customer '{editCustomerName}' updated successfully!";
+                showSuccessModal = true;
+                StateHasChanged();
+
+            }
+
+            else
+
+            {
+
+                errorMessage = "Failed to update customer. Please try again.";
+
+            }
+
+        }
+
+        catch (Exception ex)
+
+        {
+
+            errorMessage = $"Error updating customer: {ex.Message}";
+
+        }
+
+        finally
+
+        {
+
+            isLoading = false;
+
+            StateHasChanged();
+
+        }
+
+    }
+
+}
+

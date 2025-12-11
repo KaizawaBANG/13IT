@@ -1,0 +1,647 @@
+@page "/inventory-transactions"
+@layout MainLayout
+@using MauiApp2.Services
+@using MauiApp2.Models
+@using Microsoft.JSInterop
+@using System.Linq
+@inject IAuthService AuthService
+@inject NavigationManager Navigation
+@inject IStockInService StockInService
+@inject IStockOutService StockOutService
+@inject IProductService ProductService
+@inject IJSRuntime JSRuntime
+
+<link href="css/inventory-transactions.css" rel="stylesheet" />
+<link href="css/pagination.css" rel="stylesheet" />
+
+<div class="dashboard-wrapper">
+    <Sidebar />
+    <div class="main-content">
+        <div class="content-header">
+            <h1>Stock Movements</h1>
+        </div>
+
+        <div class="inventory-section">
+            <div class="product-table-container">
+                <!-- Alert Messages -->
+                @if (!string.IsNullOrEmpty(errorMessage))
+                {
+                    <div class="alert alert-error">
+                        <span class="alert-icon"><i class="fas fa-exclamation-triangle"></i></span>
+                        <span>@errorMessage</span>
+                        <button class="alert-close" @onclick="ClearError"><i class="fas fa-times"></i></button>
+                    </div>
+                }
+
+                @if (isLoading)
+                {
+                    <div class="loading-indicator">
+                        <div class="spinner"></div>
+                        <span>Loading movement history...</span>
+                    </div>
+                }
+
+                <!-- Date Filters -->
+                <div class="filter-section">
+                    <div class="filter-group">
+                        <label>Date Range</label>
+                        <div class="date-range-filters">
+                            <input type="date" class="form-control" value="@(startDate?.ToString("yyyy-MM-dd") ?? "")" @onchange="OnStartDateChange" />
+                            <span>to</span>
+                            <input type="date" class="form-control" value="@(endDate?.ToString("yyyy-MM-dd") ?? "")" @onchange="OnEndDateChange" />
+                        </div>
+                    </div>
+
+                    <div class="filter-group">
+                        <label>Transaction Type</label>
+                        <div class="select-wrapper">
+                            <select class="form-control" value="@selectedTransactionType" @onchange="OnFilterChanged">
+                                <option value="all">All Movements</option>
+                                <option value="stockin">Stock In</option>
+                                <option value="stockout">Stock Out</option>
+                            </select>
+                            <i class="fas fa-chevron-down select-icon"></i>
+                        </div>
+                    </div>
+
+                    <div class="filter-actions">
+                        <button class="btn-clear" @onclick="ClearDateFilters">
+                            <i class="fas fa-times"></i>
+                            <span>Clear Filters</span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Summary Cards -->
+                <div class="summary-cards">
+                    <div class="summary-card">
+                        <div class="summary-icon total-movements-icon">
+                            <i class="fas fa-exchange-alt"></i>
+                        </div>
+                        <div class="summary-content">
+                            <div class="summary-label">Today's Total Movement</div>
+                            <div class="summary-value">@TodayTotalMovements</div>
+                            <div class="summary-count">All transactions today</div>
+                        </div>
+                    </div>
+                    <div class="summary-card">
+                        <div class="summary-icon stock-in-icon">
+                            <i class="fas fa-arrow-down"></i>
+                        </div>
+                        <div class="summary-content">
+                            <div class="summary-label">Today's Stock In</div>
+                            <div class="summary-value">@TodayStockInQty</div>
+                            <div class="summary-count">@TodayStockInCount transactions</div>
+                        </div>
+                    </div>
+                    <div class="summary-card">
+                        <div class="summary-icon stock-out-icon">
+                            <i class="fas fa-arrow-up"></i>
+                        </div>
+                        <div class="summary-content">
+                            <div class="summary-label">Today's Stock Out</div>
+                            <div class="summary-value">@TodayStockOutQty</div>
+                            <div class="summary-count">@TodayStockOutCount transactions</div>
+                        </div>
+                    </div>
+                    <div class="summary-card">
+                        <div class="summary-icon net-movement-icon">
+                            <i class="fas fa-chart-line"></i>
+                        </div>
+                        <div class="summary-content">
+                            <div class="summary-label">Today's Net Movement</div>
+                            <div class="summary-value @(TodayNetMovement >= 0 ? "positive" : "negative")">@(TodayNetMovement >= 0 ? "+" : "")@TodayNetMovement</div>
+                            <div class="summary-count">@(TodayNetMovement >= 0 ? "Net increase" : "Net decrease")</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="toolbar">
+                    <div style="display: flex; gap: var(--spacing-md); align-items: center; flex-wrap: wrap;">
+                        <a href="/stockin" class="add-item-btn" style="background: linear-gradient(135deg, #10b981 0%, #059669 100%); text-decoration: none;">
+                            <i class="fas fa-plus"></i>
+                            <span>Stock In</span>
+                        </a>
+                        <a href="/stockout" class="add-item-btn" style="background: linear-gradient(135deg, #6b7280 0%, #4b5563 100%); text-decoration: none;">
+                            <i class="fas fa-minus"></i>
+                            <span>Stock Out</span>
+                        </a>
+                    </div>
+
+                    <div class="search-container">
+                        <input type="text"
+                               class="search-input"
+                               placeholder="Search by product name, SKU, reference number..."
+                               value="@searchTerm"
+                               @oninput="OnSearchInput" />
+                        <span class="search-icon"><i class="fas fa-search"></i></span>
+                    </div>
+                </div>
+
+                <div class="table-wrapper">
+                    <table class="product-table">
+                    <thead>
+                        <tr>
+                            <th>Date & Time</th>
+                            <th>Product</th>
+                            <th>Type</th>
+                            <th>Reference #</th>
+                            <th>Stock In</th>
+                            <th>Stock Out</th>
+                            <th>Stock Level</th>
+                            <th>Reason</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @if (PaginatedMovements.Any())
+                        {
+                            @foreach (var movement in PaginatedMovements)
+                            {
+                                <tr>
+                                    <td>@movement.TransactionDate.ToString("MMM dd, yyyy hh:mm tt")</td>
+                                    <td>
+                                        <div>
+                                            <strong>@movement.ProductName</strong>
+                                            @if (!string.IsNullOrEmpty(movement.ProductSKU))
+                                            {
+                                                <br />
+                                                <small style="color: #6b7280;">SKU: @movement.ProductSKU</small>
+                                            }
+                                        </div>
+                                    </td>
+                                    <td>
+                                        <span class="status-badge @(movement.TransactionType == "Stock In" ? "active" : "inactive")">
+                                            <i class="fas @(movement.TransactionType == "Stock In" ? "fa-arrow-down" : "fa-arrow-up")"></i>
+                                            @movement.TransactionType
+                                        </span>
+                                    </td>
+                                    <td>
+                                        <span class="invoice-number">@movement.ReferenceNumber</span>
+                                    </td>
+                                    <td>
+                                        @if (movement.TransactionType == "Stock In")
+                                        {
+                                            <span style="color: #059669; font-weight: 600;">+@movement.Quantity</span>
+                                        }
+                                        else
+                                        {
+                                            <span style="color: #9ca3af;">-</span>
+                                        }
+                                    </td>
+                                    <td>
+                                        @if (movement.TransactionType == "Stock Out")
+                                        {
+                                            <span style="color: #dc2626; font-weight: 600;">-@movement.Quantity</span>
+                                        }
+                                        else
+                                        {
+                                            <span style="color: #9ca3af;">-</span>
+                                        }
+                                    </td>
+                                    <td>
+                                        <span style="font-weight: 500;">
+                                            @movement.StockLevelBefore → @movement.StockLevelAfter
+                                        </span>
+                                    </td>
+                                    <td>@movement.Reason</td>
+                                </tr>
+                            }
+                        }
+                        else
+                        {
+                            <tr>
+                                <td colspan="8" class="empty-state-cell">
+                                    <div class="empty-state">
+                                        <i class="fas fa-boxes empty-state-icon"></i>
+                                        @if (string.IsNullOrWhiteSpace(searchTerm) && !HasActiveDateFilters())
+                                        {
+                                            <p class="empty-state-text">No inventory movements found.</p>
+                                        }
+                                        else
+                                        {
+                                            <p class="empty-state-text">No movements match your search criteria or date filters.</p>
+                                        }
+                                    </div>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                    </table>
+                </div>
+
+                <!-- Pagination -->
+                @if (FilteredMovements.Any())
+                {
+                    <Pagination CurrentPage="@currentPage"
+                                PageSize="@pageSize"
+                                TotalItems="@FilteredMovements.Count()"
+                                PageChanged="@OnPageChanged"
+                                PageSizeChanged="@OnPageSizeChanged" />
+                }
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    private string searchTerm = "";
+    private string selectedTransactionType = "all";
+    private List<ProductMovement> allMovements = new List<ProductMovement>();
+    private bool isLoading = false;
+    private string errorMessage = "";
+
+    // Date filters
+    private DateTime? startDate = null;
+    private DateTime? endDate = null;
+
+    // Pagination
+    private int currentPage = 1;
+    private int pageSize = 20;
+
+    // Model for product movement (one row per product movement)
+    private class ProductMovement
+    {
+        public DateTime TransactionDate { get; set; }
+        public string ProductName { get; set; } = "";
+        public string? ProductSKU { get; set; }
+        public int ProductId { get; set; }
+        public string TransactionType { get; set; } = ""; // "Stock In" or "Stock Out"
+        public string ReferenceNumber { get; set; } = "";
+        public string? PONumber { get; set; }
+        public string? SalesOrderNumber { get; set; }
+        public int Quantity { get; set; }
+        public string Reason { get; set; } = "";
+        public string? ProcessedByName { get; set; }
+        public int StockLevelBefore { get; set; }
+        public int StockLevelAfter { get; set; }
+        public DateTime SortDate { get; set; } // For sorting
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!AuthService.IsAuthenticated)
+        {
+            Navigation.NavigateTo("/");
+            return;
+        }
+
+        await LoadMovements();
+    }
+
+    private async Task LoadMovements()
+    {
+        try
+        {
+            isLoading = true;
+            errorMessage = "";
+            StateHasChanged();
+
+            allMovements = new List<ProductMovement>();
+
+            // Load Stock In movements
+            var stockIns = await StockInService.GetStockInHistoryAsync();
+            foreach (var stockIn in stockIns)
+            {
+                var items = await StockInService.GetStockInItemsAsync(stockIn.stock_in_id);
+                foreach (var item in items)
+                {
+                    allMovements.Add(new ProductMovement
+                    {
+                        TransactionDate = stockIn.stock_in_date,
+                        SortDate = stockIn.stock_in_date,
+                        ProductName = !string.IsNullOrWhiteSpace(item.product_name) ? item.product_name : $"Product ID: {item.product_id} (Deleted)",
+                        ProductSKU = item.product_sku,
+                        ProductId = item.product_id,
+                        TransactionType = "Stock In",
+                        ReferenceNumber = stockIn.stock_in_number,
+                        PONumber = stockIn.po_number,
+                        Quantity = item.quantity_received,
+                        Reason = "Stock in",
+                        ProcessedByName = stockIn.processed_by_name,
+                        StockLevelBefore = 0, // Will calculate below
+                        StockLevelAfter = 0   // Will calculate below
+                    });
+                }
+            }
+
+            // Load Stock Out movements
+            var stockOuts = await StockOutService.GetStockOutHistoryAsync();
+            foreach (var stockOut in stockOuts)
+            {
+                var items = await StockOutService.GetStockOutItemsAsync(stockOut.stock_out_id);
+                foreach (var item in items)
+                {
+                    allMovements.Add(new ProductMovement
+                    {
+                        TransactionDate = stockOut.stock_out_date,
+                        SortDate = stockOut.stock_out_date,
+                        ProductName = !string.IsNullOrWhiteSpace(item.product_name) ? item.product_name : $"Product ID: {item.product_id} (Deleted)",
+                        ProductSKU = item.product_sku,
+                        ProductId = item.product_id,
+                        TransactionType = "Stock Out",
+                        ReferenceNumber = stockOut.stock_out_number,
+                        SalesOrderNumber = stockOut.sales_order_number,
+                        Quantity = item.quantity,
+                        Reason = item.reason ?? "Sale",
+                        ProcessedByName = stockOut.processed_by_name,
+                        StockLevelBefore = 0, // Will calculate below
+                        StockLevelAfter = 0   // Will calculate below
+                    });
+                }
+            }
+
+            // Calculate stock levels for each product
+            await CalculateStockLevels();
+
+            // Sort by date descending (most recent first)
+            allMovements = allMovements.OrderByDescending(m => m.SortDate).ThenByDescending(m => m.ProductId).ToList();
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Error loading movements: {ex.Message}";
+            Console.WriteLine($"Error: {ex.Message}");
+        }
+        finally
+        {
+            isLoading = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task CalculateStockLevels()
+    {
+        // Group movements by product
+        var productGroups = allMovements.GroupBy(m => m.ProductId);
+
+        foreach (var productGroup in productGroups)
+        {
+            // Get current stock level for this product
+            var product = await ProductService.GetProductByIdAsync(productGroup.Key);
+            int currentStock = product.quantity ?? 0;
+
+            // Sort movements for this product by date (oldest first) to calculate running totals
+            var sortedMovements = productGroup.OrderBy(m => m.SortDate).ThenBy(m => m.TransactionType == "Stock In" ? 0 : 1).ToList();
+
+            // Calculate stock levels working backwards from current stock
+            // We'll work backwards: start with current stock and subtract/add movements in reverse
+            int runningStock = currentStock;
+
+            // Process in reverse chronological order to calculate historical levels
+            for (int i = sortedMovements.Count - 1; i >= 0; i--)
+            {
+                var movement = sortedMovements[i];
+                
+                if (movement.TransactionType == "Stock In")
+                {
+                    // Stock In: before = current - quantity, after = current
+                    movement.StockLevelAfter = runningStock;
+                    runningStock -= movement.Quantity;
+                    movement.StockLevelBefore = runningStock;
+                }
+                else // Stock Out
+                {
+                    // Stock Out: before = current + quantity, after = current
+                    movement.StockLevelAfter = runningStock;
+                    runningStock += movement.Quantity;
+                    movement.StockLevelBefore = runningStock;
+                }
+            }
+        }
+    }
+
+    private IEnumerable<ProductMovement> FilteredMovements
+    {
+        get
+        {
+            var filtered = allMovements.AsEnumerable();
+
+            // Filter by transaction type
+            if (selectedTransactionType == "stockin")
+            {
+                filtered = filtered.Where(m => m.TransactionType == "Stock In");
+            }
+            else if (selectedTransactionType == "stockout")
+            {
+                filtered = filtered.Where(m => m.TransactionType == "Stock Out");
+            }
+
+            // Filter by date range
+            if (startDate.HasValue)
+            {
+                filtered = filtered.Where(m => m.TransactionDate.Date >= startDate.Value.Date);
+            }
+            if (endDate.HasValue)
+            {
+                filtered = filtered.Where(m => m.TransactionDate.Date <= endDate.Value.Date);
+            }
+
+            // Filter by search term
+            if (!string.IsNullOrWhiteSpace(searchTerm))
+            {
+                filtered = filtered.Where(m =>
+                    m.ProductName.Contains(searchTerm, StringComparison.OrdinalIgnoreCase) ||
+                    (m.ProductSKU != null && m.ProductSKU.Contains(searchTerm, StringComparison.OrdinalIgnoreCase)) ||
+                    m.ReferenceNumber.Contains(searchTerm, StringComparison.OrdinalIgnoreCase) ||
+                    (m.PONumber != null && m.PONumber.Contains(searchTerm, StringComparison.OrdinalIgnoreCase)) ||
+                    (m.SalesOrderNumber != null && m.SalesOrderNumber.Contains(searchTerm, StringComparison.OrdinalIgnoreCase)) ||
+                    m.Reason.Contains(searchTerm, StringComparison.OrdinalIgnoreCase));
+            }
+
+            // Sort by date descending (most recent first)
+            return filtered.OrderByDescending(m => m.SortDate).ThenByDescending(m => m.ProductId);
+        }
+    }
+
+    private IEnumerable<ProductMovement> PaginatedMovements
+    {
+        get
+        {
+            var filtered = FilteredMovements.ToList();
+            return filtered.Skip((currentPage - 1) * pageSize).Take(pageSize);
+        }
+    }
+
+    private void OnPageChanged(int page)
+    {
+        currentPage = page;
+        StateHasChanged();
+    }
+
+    private void OnPageSizeChanged(int newPageSize)
+    {
+        pageSize = newPageSize;
+        currentPage = 1;
+        StateHasChanged();
+    }
+
+    private void OnSearchInput(ChangeEventArgs e)
+    {
+        searchTerm = e.Value?.ToString() ?? "";
+        currentPage = 1;
+        StateHasChanged();
+    }
+
+    private void OnFilterChanged(ChangeEventArgs e)
+    {
+        selectedTransactionType = e.Value?.ToString() ?? "all";
+        currentPage = 1;
+        StateHasChanged();
+    }
+
+    private void OnStartDateChange(ChangeEventArgs e)
+    {
+        if (DateTime.TryParse(e.Value?.ToString(), out DateTime date))
+        {
+            startDate = date;
+        }
+        else
+        {
+            startDate = null;
+        }
+        currentPage = 1;
+        StateHasChanged();
+    }
+
+    private void OnEndDateChange(ChangeEventArgs e)
+    {
+        if (DateTime.TryParse(e.Value?.ToString(), out DateTime date))
+        {
+            endDate = date;
+        }
+        else
+        {
+            endDate = null;
+        }
+        currentPage = 1;
+        StateHasChanged();
+    }
+
+    private void ClearDateFilters()
+    {
+        startDate = null;
+        endDate = null;
+        currentPage = 1;
+        StateHasChanged();
+    }
+
+    private bool HasActiveDateFilters()
+    {
+        return startDate.HasValue || endDate.HasValue;
+    }
+
+    // Summary card calculations
+    private int TotalMovements
+    {
+        get
+        {
+            return FilteredMovements.Count();
+        }
+    }
+
+    private int StockInCount
+    {
+        get
+        {
+            return FilteredMovements.Count(m => m.TransactionType == "Stock In");
+        }
+    }
+
+    private int StockOutCount
+    {
+        get
+        {
+            return FilteredMovements.Count(m => m.TransactionType == "Stock Out");
+        }
+    }
+
+    private int TotalStockInQty
+    {
+        get
+        {
+            return FilteredMovements.Where(m => m.TransactionType == "Stock In").Sum(m => m.Quantity);
+        }
+    }
+
+    private int TotalStockOutQty
+    {
+        get
+        {
+            return FilteredMovements.Where(m => m.TransactionType == "Stock Out").Sum(m => m.Quantity);
+        }
+    }
+
+    private int NetMovement
+    {
+        get
+        {
+            return TotalStockInQty - TotalStockOutQty;
+        }
+    }
+
+    // Today's movement calculations
+    private int TodayTotalMovements
+    {
+        get
+        {
+            var today = DateTime.Today;
+            return allMovements
+                .Count(m => m.TransactionDate.Date == today);
+        }
+    }
+
+    private int TodayStockInQty
+    {
+        get
+        {
+            var today = DateTime.Today;
+            return allMovements
+                .Where(m => m.TransactionType == "Stock In" && m.TransactionDate.Date == today)
+                .Sum(m => m.Quantity);
+        }
+    }
+
+    private int TodayStockOutQty
+    {
+        get
+        {
+            var today = DateTime.Today;
+            return allMovements
+                .Where(m => m.TransactionType == "Stock Out" && m.TransactionDate.Date == today)
+                .Sum(m => m.Quantity);
+        }
+    }
+
+    private int TodayStockInCount
+    {
+        get
+        {
+            var today = DateTime.Today;
+            return allMovements
+                .Count(m => m.TransactionType == "Stock In" && m.TransactionDate.Date == today);
+        }
+    }
+
+    private int TodayStockOutCount
+    {
+        get
+        {
+            var today = DateTime.Today;
+            return allMovements
+                .Count(m => m.TransactionType == "Stock Out" && m.TransactionDate.Date == today);
+        }
+    }
+
+    private int TodayNetMovement
+    {
+        get
+        {
+            return TodayStockInQty - TodayStockOutQty;
+        }
+    }
+
+    private void ClearError()
+    {
+        errorMessage = "";
+        StateHasChanged();
+    }
+}
