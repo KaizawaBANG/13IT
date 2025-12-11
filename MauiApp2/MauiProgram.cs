@@ -39,6 +39,7 @@ public static class MauiProgram
         // Offline Mode & Sync Services
         builder.Services.AddSingleton<IConnectivityService, ConnectivityService>();
         builder.Services.AddScoped<ISyncQueueService, SyncQueueService>();
+        builder.Services.AddSingleton<IPcIdentifierService, PcIdentifierService>();
         builder.Services.AddSingleton<IAutoSyncService, AutoSyncService>();
         
         // Accounting Services

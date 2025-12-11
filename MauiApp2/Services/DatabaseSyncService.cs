@@ -10,6 +10,7 @@ namespace MauiApp2.Services
     public interface IDatabaseSyncService
     {
         Task<SyncResult> SyncDatabaseAsync(string localConnectionString, string cloudConnectionString);
+        Task<SyncResult> SyncBidirectionalAsync(string localConnectionString, string cloudConnectionString, string pcIdentifier);
         Task<bool> TestConnectionAsync(string connectionString);
     }
 
@@ -18,21 +19,38 @@ namespace MauiApp2.Services
         // Tables in order (respecting foreign key dependencies)
         private static readonly List<string> Tables = new List<string>
         {
+            // User & Role Management
             "tbl_roles",
             "tbl_users",
+            
+            // Product Master Data
             "tbl_category",
             "tbl_brand",
             "tbl_tax",
             "tbl_product",
+            
+            // Supplier & Customer
             "tbl_supplier",
+            "tbl_customer",
+            
+            // Purchase Operations
             "tbl_purchase_order",
             "tbl_purchase_order_items",
             "tbl_stock_in",
             "tbl_stock_in_items",
+            
+            // Sales Operations
             "tbl_sales_order",
             "tbl_sales_order_items",
             "tbl_stock_out",
-            "tbl_stock_out_items"
+            "tbl_stock_out_items",
+            
+            // Accounting
+            "tbl_chart_of_accounts",
+            "tbl_accounts_payable",
+            "tbl_payments",
+            "tbl_expenses",
+            "tbl_general_ledger"
         };
 
         public async Task<bool> TestConnectionAsync(string connectionString)
@@ -132,6 +150,540 @@ namespace MauiApp2.Services
             }
 
             return result;
+        }
+
+        /// <summary>
+        /// Performs bidirectional synchronization:
+        /// 1. Pulls changes from cloud to local (cloud → local)
+        /// 2. Pushes changes from local to cloud (local → cloud)
+        /// Uses timestamps to detect changes and resolve conflicts
+        /// </summary>
+        public async Task<SyncResult> SyncBidirectionalAsync(string localConnectionString, string cloudConnectionString, string pcIdentifier)
+        {
+            var result = new SyncResult();
+            result.StartTime = DateTime.Now;
+
+            try
+            {
+                // Test connections
+                result.Messages.Add("Testing local database connection...");
+                if (!await TestConnectionAsync(localConnectionString))
+                {
+                    result.IsSuccess = false;
+                    result.ErrorMessage = "Failed to connect to local database";
+                    return result;
+                }
+                result.Messages.Add("✓ Local database connection successful");
+
+                result.Messages.Add("Testing cloud database connection...");
+                if (!await TestConnectionAsync(cloudConnectionString))
+                {
+                    result.IsSuccess = false;
+                    result.ErrorMessage = "Failed to connect to cloud database";
+                    return result;
+                }
+                result.Messages.Add("✓ Cloud database connection successful");
+
+                result.Messages.Add("");
+                result.Messages.Add("Starting bidirectional synchronization...");
+                result.Messages.Add($"PC Identifier: {pcIdentifier}");
+
+                // Step 1: Pull changes from cloud to local (cloud → local)
+                result.Messages.Add("");
+                result.Messages.Add("=== Step 1: Pulling changes from cloud to local ===");
+                foreach (var tableName in Tables)
+                {
+                    var pullResult = await PullTableFromCloudAsync(localConnectionString, cloudConnectionString, tableName, pcIdentifier);
+                    result.TotalTablesProcessed++;
+                    result.TotalRowsCopied += pullResult.RowsCopied;
+                    
+                    if (pullResult.IsSuccess)
+                    {
+                        result.Messages.Add($"✓ Pulled {tableName}: {pullResult.RowsCopied} rows");
+                    }
+                    else
+                    {
+                        result.Messages.Add($"✗ Pull {tableName}: {pullResult.ErrorMessage}");
+                        result.HasWarnings = true;
+                    }
+                }
+
+                // Step 2: Push changes from local to cloud (local → cloud)
+                result.Messages.Add("");
+                result.Messages.Add("=== Step 2: Pushing changes from local to cloud ===");
+                foreach (var tableName in Tables)
+                {
+                    var pushResult = await PushTableToCloudAsync(localConnectionString, cloudConnectionString, tableName, pcIdentifier);
+                    result.TotalTablesProcessed++;
+                    result.TotalRowsCopied += pushResult.RowsCopied;
+                    
+                    if (pushResult.IsSuccess)
+                    {
+                        result.Messages.Add($"✓ Pushed {tableName}: {pushResult.RowsCopied} rows");
+                    }
+                    else
+                    {
+                        result.Messages.Add($"✗ Push {tableName}: {pushResult.ErrorMessage}");
+                        result.HasWarnings = true;
+                    }
+                }
+
+                result.IsSuccess = true;
+                result.Messages.Add("");
+                result.Messages.Add($"=== Bidirectional Sync Complete ===");
+                result.Messages.Add($"Total tables processed: {result.TotalTablesProcessed}");
+                result.Messages.Add($"Total rows synced: {result.TotalRowsCopied}");
+            }
+            catch (Exception ex)
+            {
+                result.IsSuccess = false;
+                result.ErrorMessage = ex.Message;
+                result.Messages.Add($"ERROR: {ex.Message}");
+            }
+            finally
+            {
+                result.EndTime = DateTime.Now;
+                result.Duration = result.EndTime - result.StartTime;
+            }
+
+            return result;
+        }
+
+        /// <summary>
+        /// Pulls changes from cloud database to local database
+        /// Only pulls records that have been modified since last sync
+        /// </summary>
+        private async Task<TableSyncResult> PullTableFromCloudAsync(string localConnectionString, string cloudConnectionString, string tableName, string pcIdentifier)
+        {
+            var result = new TableSyncResult();
+            SqlConnection? localConn = null;
+            SqlConnection? cloudConn = null;
+
+            try
+            {
+                localConn = new SqlConnection(localConnectionString);
+                var cloudConnBuilder = new SqlConnectionStringBuilder(cloudConnectionString)
+                {
+                    ConnectTimeout = 60,
+                    CommandTimeout = 300
+                };
+                cloudConn = new SqlConnection(cloudConnBuilder.ConnectionString);
+
+                await localConn.OpenAsync();
+                await cloudConn.OpenAsync();
+
+                // Get last sync timestamp for this table
+                var lastSyncTime = await GetLastSyncTimestampAsync(localConn, pcIdentifier, tableName, "Pull");
+                
+                // Get columns
+                var cloudColumns = await GetTableColumnsAsync(cloudConn, tableName);
+                var localColumns = await GetTableColumnsAsync(localConn, tableName);
+                var columns = cloudColumns.Where(c => localColumns.Contains(c, StringComparer.OrdinalIgnoreCase)).ToList();
+
+                if (!columns.Any())
+                {
+                    result.ErrorMessage = "No matching columns found";
+                    return result;
+                }
+
+                // Check if table has modified_date column
+                var hasModifiedDate = columns.Any(c => string.Equals(c, "modified_date", StringComparison.OrdinalIgnoreCase));
+                var pkColumn = await GetPrimaryKeyColumnAsync(cloudConn, tableName);
+
+                // Build query to get changed records from cloud
+                var whereClause = "";
+                if (hasModifiedDate && lastSyncTime.HasValue)
+                {
+                    whereClause = "WHERE modified_date > @lastSyncTime OR modified_date IS NULL";
+                }
+                else if (lastSyncTime.HasValue)
+                {
+                    // If no modified_date, use created_date or just get all records
+                    var hasCreatedDate = columns.Any(c => string.Equals(c, "created_date", StringComparison.OrdinalIgnoreCase));
+                    if (hasCreatedDate)
+                    {
+                        whereClause = "WHERE created_date > @lastSyncTime";
+                    }
+                }
+
+                var selectQuery = $"SELECT * FROM [{tableName}] {whereClause}";
+                using var cloudCmd = new SqlCommand(selectQuery, cloudConn);
+                if (lastSyncTime.HasValue)
+                {
+                    cloudCmd.Parameters.AddWithValue("@lastSyncTime", lastSyncTime.Value);
+                }
+
+                using var reader = await cloudCmd.ExecuteReaderAsync();
+                int rowCount = 0;
+
+                // Check for identity column
+                var hasIdentity = await HasIdentityColumnAsync(localConn, tableName);
+                string? identityColumnName = null;
+                if (hasIdentity)
+                {
+                    identityColumnName = await GetIdentityColumnNameAsync(localConn, tableName);
+                }
+
+                if (hasIdentity && !string.IsNullOrEmpty(identityColumnName))
+                {
+                    var identityQuery = $"SET IDENTITY_INSERT [{tableName}] ON";
+                    using var identityCmd = new SqlCommand(identityQuery, localConn);
+                    await identityCmd.ExecuteNonQueryAsync();
+                }
+
+                while (await reader.ReadAsync())
+                {
+                    // Check if row exists in local
+                    bool rowExists = false;
+                    object? pkValue = null;
+                    
+                    if (!string.IsNullOrEmpty(pkColumn) && columns.Contains(pkColumn, StringComparer.OrdinalIgnoreCase))
+                    {
+                        pkValue = reader[pkColumn];
+                        var rowExistsQuery = $"SELECT COUNT(*) FROM [{tableName}] WHERE [{pkColumn}] = @pkValue";
+                        using var rowExistsCmd = new SqlCommand(rowExistsQuery, localConn);
+                        rowExistsCmd.Parameters.AddWithValue("@pkValue", pkValue);
+                        rowExists = (int)await rowExistsCmd.ExecuteScalarAsync() > 0;
+                    }
+
+                    if (rowExists && !string.IsNullOrEmpty(pkColumn) && pkValue != null)
+                    {
+                        // Update existing row (conflict resolution: cloud wins if it's newer)
+                        var updateColumns = columns.Where(c => !string.Equals(c, pkColumn, StringComparison.OrdinalIgnoreCase)).ToList();
+                        if (updateColumns.Any())
+                        {
+                            // Check if cloud version is newer (if modified_date exists)
+                            bool shouldUpdate = true;
+                            if (hasModifiedDate)
+                            {
+                                var cloudModifiedDate = reader["modified_date"] as DateTime?;
+                                if (cloudModifiedDate.HasValue)
+                                {
+                                    var localModifiedDate = await GetLocalModifiedDateAsync(localConn, tableName, pkColumn, pkValue);
+                                    if (localModifiedDate.HasValue && localModifiedDate.Value >= cloudModifiedDate.Value)
+                                    {
+                                        shouldUpdate = false; // Local is newer, don't overwrite
+                                    }
+                                }
+                            }
+
+                            if (shouldUpdate)
+                            {
+                                var setClause = string.Join(", ", updateColumns.Select(c => $"[{c}] = @{c}"));
+                                var updateQuery = $"UPDATE [{tableName}] SET {setClause} WHERE [{pkColumn}] = @pkValue";
+                                
+                                using var updateCmd = new SqlCommand(updateQuery, localConn);
+                                foreach (var column in updateColumns)
+                                {
+                                    var value = reader[column];
+                                    updateCmd.Parameters.AddWithValue($"@{column}", value == DBNull.Value ? DBNull.Value : value);
+                                }
+                                updateCmd.Parameters.AddWithValue("@pkValue", pkValue);
+                                await updateCmd.ExecuteNonQueryAsync();
+                                rowCount++;
+                            }
+                        }
+                    }
+                    else
+                    {
+                        // Insert new row
+                        var columnList = string.Join(", ", columns.Select(c => $"[{c}]"));
+                        var valueList = string.Join(", ", columns.Select(c => $"@{c}"));
+                        var insertQuery = $"INSERT INTO [{tableName}] ({columnList}) VALUES ({valueList})";
+                        
+                        using var insertCmd = new SqlCommand(insertQuery, localConn);
+                        foreach (var column in columns)
+                        {
+                            var value = reader[column];
+                            insertCmd.Parameters.AddWithValue($"@{column}", value == DBNull.Value ? DBNull.Value : value);
+                        }
+                        await insertCmd.ExecuteNonQueryAsync();
+                        rowCount++;
+                    }
+                }
+
+                if (hasIdentity && !string.IsNullOrEmpty(identityColumnName))
+                {
+                    var identityQuery = $"SET IDENTITY_INSERT [{tableName}] OFF";
+                    using var identityCmd = new SqlCommand(identityQuery, localConn);
+                    await identityCmd.ExecuteNonQueryAsync();
+                }
+
+                // Update sync timestamp
+                await UpdateSyncTimestampAsync(localConn, pcIdentifier, tableName, "Pull", rowCount);
+
+                result.RowsCopied = rowCount;
+                result.IsSuccess = true;
+            }
+            catch (Exception ex)
+            {
+                result.IsSuccess = false;
+                result.ErrorMessage = ex.Message;
+            }
+            finally
+            {
+                localConn?.Close();
+                localConn?.Dispose();
+                cloudConn?.Close();
+                cloudConn?.Dispose();
+            }
+
+            return result;
+        }
+
+        /// <summary>
+        /// Pushes changes from local database to cloud database
+        /// Only pushes records that have been modified since last sync
+        /// </summary>
+        private async Task<TableSyncResult> PushTableToCloudAsync(string localConnectionString, string cloudConnectionString, string tableName, string pcIdentifier)
+        {
+            var result = new TableSyncResult();
+            SqlConnection? localConn = null;
+            SqlConnection? cloudConn = null;
+
+            try
+            {
+                localConn = new SqlConnection(localConnectionString);
+                var cloudConnBuilder = new SqlConnectionStringBuilder(cloudConnectionString)
+                {
+                    ConnectTimeout = 60,
+                    CommandTimeout = 300
+                };
+                cloudConn = new SqlConnection(cloudConnBuilder.ConnectionString);
+
+                await localConn.OpenAsync();
+                await cloudConn.OpenAsync();
+
+                // Get last sync timestamp for this table
+                var lastSyncTime = await GetLastSyncTimestampAsync(localConn, pcIdentifier, tableName, "Push");
+                
+                // Get columns
+                var localColumns = await GetTableColumnsAsync(localConn, tableName);
+                var cloudColumns = await GetTableColumnsAsync(cloudConn, tableName);
+                var columns = localColumns.Where(c => cloudColumns.Contains(c, StringComparer.OrdinalIgnoreCase)).ToList();
+
+                if (!columns.Any())
+                {
+                    result.ErrorMessage = "No matching columns found";
+                    return result;
+                }
+
+                // Check if table has modified_date column
+                var hasModifiedDate = columns.Any(c => string.Equals(c, "modified_date", StringComparison.OrdinalIgnoreCase));
+                var pkColumn = await GetPrimaryKeyColumnAsync(cloudConn, tableName);
+
+                // Build query to get changed records from local
+                var whereClause = "";
+                if (hasModifiedDate && lastSyncTime.HasValue)
+                {
+                    whereClause = "WHERE modified_date > @lastSyncTime OR modified_date IS NULL";
+                }
+                else if (lastSyncTime.HasValue)
+                {
+                    var hasCreatedDate = columns.Any(c => string.Equals(c, "created_date", StringComparison.OrdinalIgnoreCase));
+                    if (hasCreatedDate)
+                    {
+                        whereClause = "WHERE created_date > @lastSyncTime";
+                    }
+                }
+
+                var selectQuery = $"SELECT * FROM [{tableName}] {whereClause}";
+                using var localCmd = new SqlCommand(selectQuery, localConn);
+                if (lastSyncTime.HasValue)
+                {
+                    localCmd.Parameters.AddWithValue("@lastSyncTime", lastSyncTime.Value);
+                }
+
+                using var reader = await localCmd.ExecuteReaderAsync();
+                int rowCount = 0;
+
+                // Check for identity column
+                var hasIdentity = await HasIdentityColumnAsync(cloudConn, tableName);
+                string? identityColumnName = null;
+                if (hasIdentity)
+                {
+                    identityColumnName = await GetIdentityColumnNameAsync(cloudConn, tableName);
+                }
+
+                if (hasIdentity && !string.IsNullOrEmpty(identityColumnName))
+                {
+                    var identityQuery = $"SET IDENTITY_INSERT [{tableName}] ON";
+                    using var identityCmd = new SqlCommand(identityQuery, cloudConn);
+                    await identityCmd.ExecuteNonQueryAsync();
+                }
+
+                while (await reader.ReadAsync())
+                {
+                    // Check if row exists in cloud
+                    bool rowExists = false;
+                    object? pkValue = null;
+                    
+                    if (!string.IsNullOrEmpty(pkColumn) && columns.Contains(pkColumn, StringComparer.OrdinalIgnoreCase))
+                    {
+                        pkValue = reader[pkColumn];
+                        var rowExistsQuery = $"SELECT COUNT(*) FROM [{tableName}] WHERE [{pkColumn}] = @pkValue";
+                        using var rowExistsCmd = new SqlCommand(rowExistsQuery, cloudConn);
+                        rowExistsCmd.Parameters.AddWithValue("@pkValue", pkValue);
+                        rowExists = (int)await rowExistsCmd.ExecuteScalarAsync() > 0;
+                    }
+
+                    if (rowExists && !string.IsNullOrEmpty(pkColumn) && pkValue != null)
+                    {
+                        // Update existing row (conflict resolution: local wins if it's newer)
+                        var updateColumns = columns.Where(c => !string.Equals(c, pkColumn, StringComparison.OrdinalIgnoreCase)).ToList();
+                        if (updateColumns.Any())
+                        {
+                            bool shouldUpdate = true;
+                            if (hasModifiedDate)
+                            {
+                                var localModifiedDate = reader["modified_date"] as DateTime?;
+                                if (localModifiedDate.HasValue)
+                                {
+                                    var cloudModifiedDate = await GetLocalModifiedDateAsync(cloudConn, tableName, pkColumn, pkValue);
+                                    if (cloudModifiedDate.HasValue && cloudModifiedDate.Value >= localModifiedDate.Value)
+                                    {
+                                        shouldUpdate = false; // Cloud is newer, don't overwrite
+                                    }
+                                }
+                            }
+
+                            if (shouldUpdate)
+                            {
+                                var setClause = string.Join(", ", updateColumns.Select(c => $"[{c}] = @{c}"));
+                                var updateQuery = $"UPDATE [{tableName}] SET {setClause} WHERE [{pkColumn}] = @pkValue";
+                                
+                                using var updateCmd = new SqlCommand(updateQuery, cloudConn);
+                                foreach (var column in updateColumns)
+                                {
+                                    var value = reader[column];
+                                    updateCmd.Parameters.AddWithValue($"@{column}", value == DBNull.Value ? DBNull.Value : value);
+                                }
+                                updateCmd.Parameters.AddWithValue("@pkValue", pkValue);
+                                await updateCmd.ExecuteNonQueryAsync();
+                                rowCount++;
+                            }
+                        }
+                    }
+                    else
+                    {
+                        // Insert new row
+                        var columnList = string.Join(", ", columns.Select(c => $"[{c}]"));
+                        var valueList = string.Join(", ", columns.Select(c => $"@{c}"));
+                        var insertQuery = $"INSERT INTO [{tableName}] ({columnList}) VALUES ({valueList})";
+                        
+                        using var insertCmd = new SqlCommand(insertQuery, cloudConn);
+                        foreach (var column in columns)
+                        {
+                            var value = reader[column];
+                            insertCmd.Parameters.AddWithValue($"@{column}", value == DBNull.Value ? DBNull.Value : value);
+                        }
+                        await insertCmd.ExecuteNonQueryAsync();
+                        rowCount++;
+                    }
+                }
+
+                if (hasIdentity && !string.IsNullOrEmpty(identityColumnName))
+                {
+                    var identityQuery = $"SET IDENTITY_INSERT [{tableName}] OFF";
+                    using var identityCmd = new SqlCommand(identityQuery, cloudConn);
+                    await identityCmd.ExecuteNonQueryAsync();
+                }
+
+                // Update sync timestamp
+                await UpdateSyncTimestampAsync(localConn, pcIdentifier, tableName, "Push", rowCount);
+
+                result.RowsCopied = rowCount;
+                result.IsSuccess = true;
+            }
+            catch (Exception ex)
+            {
+                result.IsSuccess = false;
+                result.ErrorMessage = ex.Message;
+            }
+            finally
+            {
+                localConn?.Close();
+                localConn?.Dispose();
+                cloudConn?.Close();
+                cloudConn?.Dispose();
+            }
+
+            return result;
+        }
+
+        private async Task<DateTime?> GetLastSyncTimestampAsync(SqlConnection connection, string pcIdentifier, string tableName, string direction)
+        {
+            try
+            {
+                var query = @"
+                    SELECT last_sync_timestamp 
+                    FROM tbl_sync_tracking 
+                    WHERE pc_identifier = @pcIdentifier 
+                    AND table_name = @tableName 
+                    AND (last_sync_direction = @direction OR last_sync_direction IS NULL)";
+                
+                using var cmd = new SqlCommand(query, connection);
+                cmd.Parameters.AddWithValue("@pcIdentifier", pcIdentifier);
+                cmd.Parameters.AddWithValue("@tableName", tableName);
+                cmd.Parameters.AddWithValue("@direction", direction);
+                
+                var result = await cmd.ExecuteScalarAsync();
+                return result as DateTime?;
+            }
+            catch
+            {
+                return null;
+            }
+        }
+
+        private async Task UpdateSyncTimestampAsync(SqlConnection connection, string pcIdentifier, string tableName, string direction, int recordsSynced)
+        {
+            try
+            {
+                var query = @"
+                    IF EXISTS (SELECT 1 FROM tbl_sync_tracking WHERE pc_identifier = @pcIdentifier AND table_name = @tableName)
+                    BEGIN
+                        UPDATE tbl_sync_tracking 
+                        SET last_sync_timestamp = GETDATE(),
+                            last_sync_direction = @direction,
+                            records_synced = @recordsSynced,
+                            modified_date = GETDATE()
+                        WHERE pc_identifier = @pcIdentifier AND table_name = @tableName
+                    END
+                    ELSE
+                    BEGIN
+                        INSERT INTO tbl_sync_tracking (pc_identifier, table_name, last_sync_timestamp, last_sync_direction, records_synced)
+                        VALUES (@pcIdentifier, @tableName, GETDATE(), @direction, @recordsSynced)
+                    END";
+                
+                using var cmd = new SqlCommand(query, connection);
+                cmd.Parameters.AddWithValue("@pcIdentifier", pcIdentifier);
+                cmd.Parameters.AddWithValue("@tableName", tableName);
+                cmd.Parameters.AddWithValue("@direction", direction);
+                cmd.Parameters.AddWithValue("@recordsSynced", recordsSynced);
+                
+                await cmd.ExecuteNonQueryAsync();
+            }
+            catch
+            {
+                // If table doesn't exist, that's okay
+            }
+        }
+
+        private async Task<DateTime?> GetLocalModifiedDateAsync(SqlConnection connection, string tableName, string pkColumn, object pkValue)
+        {
+            try
+            {
+                var query = $"SELECT modified_date FROM [{tableName}] WHERE [{pkColumn}] = @pkValue";
+                using var cmd = new SqlCommand(query, connection);
+                cmd.Parameters.AddWithValue("@pkValue", pkValue);
+                var result = await cmd.ExecuteScalarAsync();
+                return result as DateTime?;
+            }
+            catch
+            {
+                return null;
+            }
         }
         
         private async Task ResetIdentitySeedsAsync(string connectionString)

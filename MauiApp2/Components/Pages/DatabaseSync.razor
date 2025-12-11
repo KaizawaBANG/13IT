@@ -5,6 +5,7 @@
 @using System.Configuration
 @inject IAuthService AuthService
 @inject IDatabaseSyncService DatabaseSyncService
+@inject IPcIdentifierService PcIdentifierService
 @inject NavigationManager Navigation
 
 <link href="css/databasesync.css" rel="stylesheet" />
@@ -31,9 +32,9 @@
 
                 <!-- Sync Controls -->
                 <div class="sync-controls">
-                    <button class="btn-sync" @onclick="StartSync" disabled="@(isSyncing || isTesting)">
+                    <button class="btn-sync" @onclick="StartSynchronize" disabled="@(isSyncing || isTesting)">
                         <i class="fas fa-sync-alt @(isSyncing ? "fa-spin" : "")"></i>
-                        <span>@(isSyncing ? "Syncing..." : "Sync to Cloud")</span>
+                        <span>@(isSyncing ? "Synchronizing..." : "Synchronize")</span>
                     </button>
                     <button class="btn-test" @onclick="TestConnections" disabled="@(isSyncing || isTesting)">
                         <i class="fas fa-plug"></i>
@@ -142,13 +143,19 @@
                 <div class="info-box">
                     <h4><i class="fas fa-lightbulb"></i> Important Notes</h4>
                     <ul>
-                        <li>Make sure all tables exist in the cloud database before syncing</li>
-                        <li>The sync process will skip rows that already exist (safe to run multiple times)</li>
-                        <li>Tables are synced in order to respect foreign key relationships</li>
-                        <li>Identity seeds are automatically reset after sync to prevent ID jumps</li>
-                        <li>This process may take several minutes depending on your data size</li>
-                        <li><strong>Local Database:</strong> Your local SQL Server database with existing data</li>
-                        <li><strong>Cloud Database:</strong> MonsterAPI cloud database (will receive synced data)</li>
+                        <li><strong>How Synchronization Works:</strong></li>
+                        <li style="margin-left: 20px;">1. <strong>Pull Phase:</strong> Downloads changes from cloud database (other PCs' data)</li>
+                        <li style="margin-left: 20px;">2. <strong>Push Phase:</strong> Uploads your local changes to cloud database</li>
+                        <li style="margin-left: 20px;">3. <strong>Result:</strong> Your PC and cloud database are synchronized</li>
+                        <li></li>
+                        <li><strong>Offline Mode:</strong> All operations work offline using local database</li>
+                        <li><strong>Auto-Sync:</strong> System automatically syncs when internet connection is restored</li>
+                        <li><strong>Multi-PC Support:</strong> Multiple PCs can sync through cloud database - changes from PC2 will appear on PC1 after sync</li>
+                        <li><strong>Conflict Resolution:</strong> If both PCs modify the same record, the newer version (based on modified_date) wins</li>
+                        <li><strong>Efficient:</strong> Only syncs changed records since last sync (incremental sync)</li>
+                        <li></li>
+                        <li><strong>Note:</strong> Make sure all tables exist in the cloud database before syncing</li>
+                        <li><strong>Note:</strong> This process may take several minutes depending on your data size</li>
                     </ul>
                 </div>
             </div>
@@ -164,7 +171,7 @@
     private string errorMessage = "";
     private DateTime syncStartTime;
     private int currentTableIndex = 0;
-    private int totalTables = 15;
+    private int totalTables = 21; // All tables including accounting and customer tables
 
     protected override async Task OnInitializedAsync()
     {
@@ -197,7 +204,7 @@
         }
     }
 
-    private async Task StartSync()
+    private async Task StartSynchronize()
     {
         isSyncing = true;
         errorMessage = "";
@@ -227,11 +234,13 @@
             // Simulate progress updates
             _ = UpdateProgress();
 
-            syncResult = await DatabaseSyncService.SyncDatabaseAsync(localConnString, cloudConnString);
+            // Use bidirectional sync (pulls changes from cloud AND pushes local changes to cloud)
+            var pcIdentifier = await PcIdentifierService.GetOrCreatePcIdentifierAsync();
+            syncResult = await DatabaseSyncService.SyncBidirectionalAsync(localConnString, cloudConnString, pcIdentifier);
         }
         catch (Exception ex)
         {
-            errorMessage = $"Error during sync: {ex.Message}";
+            errorMessage = $"Error during synchronization: {ex.Message}";
         }
         finally
         {

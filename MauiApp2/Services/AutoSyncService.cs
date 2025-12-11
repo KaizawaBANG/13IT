@@ -10,6 +10,7 @@ namespace MauiApp2.Services
         private readonly IConnectivityService _connectivityService;
         private readonly IDatabaseSyncService _databaseSyncService;
         private readonly ISyncQueueService _syncQueueService;
+        private readonly IPcIdentifierService _pcIdentifierService;
         
         private CancellationTokenSource? _cancellationTokenSource;
         private bool _isSyncing = false;
@@ -36,11 +37,13 @@ namespace MauiApp2.Services
         public AutoSyncService(
             IConnectivityService connectivityService,
             IDatabaseSyncService databaseSyncService,
-            ISyncQueueService syncQueueService)
+            ISyncQueueService syncQueueService,
+            IPcIdentifierService pcIdentifierService)
         {
             _connectivityService = connectivityService;
             _databaseSyncService = databaseSyncService;
             _syncQueueService = syncQueueService;
+            _pcIdentifierService = pcIdentifierService;
             
             // Start monitoring when service is created
             _ = StartAsync();
@@ -90,8 +93,11 @@ namespace MauiApp2.Services
                     return false;
                 }
 
-                // Perform full database sync
-                _lastSyncResult = await _databaseSyncService.SyncDatabaseAsync(localConnString, cloudConnString);
+                // Get PC identifier for bidirectional sync
+                var pcIdentifier = await _pcIdentifierService.GetOrCreatePcIdentifierAsync();
+
+                // Perform bidirectional database sync (pulls from cloud AND pushes to cloud)
+                _lastSyncResult = await _databaseSyncService.SyncBidirectionalAsync(localConnString, cloudConnString, pcIdentifier);
                 _lastSyncTime = DateTime.Now;
 
                 // Process sync queue items

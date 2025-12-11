@@ -484,7 +484,7 @@
                                         var barX = 80 + (i * spacing) + (spacing - barWidth) / 2;
                                         var barHeight = cashierChartMax > 0 ? (cashierDailySalesData[i].Amount / cashierChartMax) * 330 : 0;
                                         var barY = 380 - barHeight;
-                                        
+
                                         <rect x="@barX" y="@barY" width="@barWidth" height="@barHeight" fill="#3b82f6" rx="4" />
                                         @((MarkupString)$"<text x=\"{barX + barWidth / 2}\" y=\"{barY - 10}\" font-size=\"11\" fill=\"#374151\" text-anchor=\"middle\" font-weight=\"600\">₱{(cashierDailySalesData[i].Amount / 1000):F1}k</text>")
                                         @((MarkupString)$"<text x=\"{barX + barWidth / 2}\" y=\"400\" font-size=\"11\" fill=\"#666\" text-anchor=\"middle\">{cashierDailySalesData[i].Date.ToString("ddd")}</text>")
@@ -1142,8 +1142,8 @@
                 for (int i = 0; i < inventoryMovementData.Count; i++)
                 {
                     var x = padding + (i * pointSpacing);
-                    
-                    var stockInY = inventoryChartMax > 0 
+
+                    var stockInY = inventoryChartMax > 0
                         ? 380 - ((double)inventoryMovementData[i].StockIn / inventoryChartMax * chartHeight)
                         : 380;
                     inventoryStockInPoints.Add($"{x},{stockInY}");
@@ -1215,7 +1215,7 @@
                 for (int i = 0; i < accountantChartData.Count; i++)
                 {
                     var x = padding + (i * pointSpacing);
-                    
+
                     var revenueY = accountantChartMax > 0
                         ? 380 - ((double)(accountantChartData[i].Revenue / accountantChartMax) * chartHeight)
                         : 380;
