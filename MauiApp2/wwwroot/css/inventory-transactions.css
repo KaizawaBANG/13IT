@@ -98,6 +98,8 @@
     overflow-x: hidden;
     background-color: var(--color-background);
     transition: margin-left var(--transition-slow);
+    display: flex;
+    flex-direction: column;
 }
 
 /* ============================================
@@ -116,6 +118,8 @@
     flex-direction: column;
     align-items: flex-start;
     gap: var(--spacing-xs);
+    width: 100%;
+    flex-shrink: 0;
 }
 
 .content-header h1 {
@@ -142,6 +146,9 @@
     padding: var(--spacing-2xl);
     max-width: 1800px;
     margin: 0 auto;
+    width: 100%;
+    flex: 1;
+    overflow-y: auto;
 }
 
 .product-table-container {
@@ -371,10 +378,11 @@
     grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
     gap: var(--spacing-lg);
     margin-bottom: var(--spacing-lg);
+    align-items: stretch;
 }
 
 .summary-card {
-    background: linear-gradient(135deg, var(--color-surface) 0%, #fafbfc 100%);
+    background: var(--color-surface);
     border-radius: var(--radius-lg);
     padding: var(--spacing-lg);
     box-shadow: var(--shadow-sm);
@@ -382,31 +390,14 @@
     display: flex;
     align-items: center;
     gap: var(--spacing-md);
-    transition: all var(--transition-base);
+    transition: box-shadow var(--transition-base);
     position: relative;
-    overflow: hidden;
-}
-
-.summary-card::before {
-    content: '';
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    height: 3px;
-    background: linear-gradient(90deg, var(--color-primary), var(--color-info));
-    opacity: 0;
-    transition: opacity var(--transition-base);
+    min-height: 100px;
 }
 
 .summary-card:hover {
-    transform: translateY(-2px);
     box-shadow: var(--shadow-md);
     border-color: var(--color-border-hover);
-}
-
-.summary-card:hover::before {
-    opacity: 1;
 }
 
 .summary-icon {
@@ -418,36 +409,35 @@
     justify-content: center;
     font-size: var(--font-size-2xl);
     flex-shrink: 0;
-    transition: transform var(--transition-base);
 }
 
-.summary-card:hover .summary-icon {
-    transform: scale(1.1);
-}
-
+/* Reduced saturation - muted colors */
 .summary-icon.total-movements-icon {
-    background: linear-gradient(135deg, var(--color-primary-light) 0%, #bfdbfe 100%);
-    color: var(--color-primary);
+    background-color: #e8f0f8;
+    color: #4a6fa5;
 }
 
 .summary-icon.stock-in-icon {
-    background: linear-gradient(135deg, var(--color-success-light) 0%, #a7f3d0 100%);
-    color: var(--color-success);
+    background-color: #e0f2e9;
+    color: #4a8268;
 }
 
 .summary-icon.stock-out-icon {
-    background: linear-gradient(135deg, var(--color-error-light) 0%, #fecaca 100%);
-    color: var(--color-error);
+    background-color: #fae8e8;
+    color: #9f5d5d;
 }
 
 .summary-icon.net-movement-icon {
-    background: linear-gradient(135deg, var(--color-warning-light) 0%, #fde68a 100%);
-    color: var(--color-warning);
+    background-color: #f8f4e6;
+    color: #9d8a5a;
 }
 
 .summary-content {
     flex: 1;
     min-width: 0;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
 }
 
 .summary-label {
@@ -456,30 +446,32 @@
     font-weight: var(--font-weight-semibold);
     text-transform: uppercase;
     letter-spacing: 0.05em;
-    margin-bottom: var(--spacing-xs);
+    margin-bottom: 6px;
+    line-height: 1.4;
 }
 
 .summary-value {
     font-size: var(--font-size-2xl);
     font-weight: var(--font-weight-bold);
     color: var(--color-text-primary);
-    margin-bottom: var(--spacing-xs);
+    margin-bottom: 4px;
     line-height: var(--line-height-tight);
     word-break: break-word;
 }
 
 .summary-value.positive {
-    color: var(--color-success);
+    color: #4a8268;
 }
 
 .summary-value.negative {
-    color: var(--color-error);
+    color: #9f5d5d;
 }
 
 .summary-count {
     font-size: var(--font-size-xs);
     color: var(--color-text-tertiary);
-    font-weight: var(--font-weight-medium);
+    font-weight: var(--font-weight-normal);
+    line-height: 1.4;
 }
 
 /* ============================================
@@ -659,17 +651,22 @@
     font-size: var(--font-size-xs);
     opacity: 0.5;
     transition: opacity var(--transition-fast);
+    background: none;
+    border: none;
+    padding: 0;
 }
 
 .product-table th.sortable:hover i,
 .product-table th.sortable i.fa-sort-up,
 .product-table th.sortable i.fa-sort-down {
     opacity: 1;
-    color: var(--color-primary);
+    color: #6b8dc4;
+    background: none;
 }
 
 .product-table th.sortable i.sort-inactive {
     opacity: 0.3;
+    background: none;
 }
 
 .product-table tbody tr {
@@ -748,29 +745,34 @@
 }
 
 /* ============================================
-   Status Badges
+   Status Badges - Not buttons, just badges
    ============================================ */
 
 .status-badge {
     display: inline-flex;
     align-items: center;
     gap: var(--spacing-xs);
-    padding: var(--spacing-xs) var(--spacing-sm);
+    padding: 4px 8px;
     border-radius: var(--radius-sm);
     font-size: var(--font-size-xs);
-    font-weight: var(--font-weight-semibold);
+    font-weight: var(--font-weight-medium);
     text-transform: uppercase;
     letter-spacing: 0.05em;
+    border: 1px solid;
+    background-color: transparent;
+    cursor: default;
 }
 
 .status-badge.active {
-    background-color: var(--color-success-light);
-    color: #065f46;
+    border-color: #9fc7b3;
+    color: #4a8268;
+    background-color: transparent;
 }
 
 .status-badge.inactive {
-    background-color: var(--color-error-light);
-    color: #991b1b;
+    border-color: #d4a5a5;
+    color: #9f5d5d;
+    background-color: transparent;
 }
 
 .status-badge i {

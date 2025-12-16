@@ -45,22 +45,36 @@
     display: none !important;
 }
 
+.content-header,
 .header {
-    background-color: #ffffff;
-    padding: 28px 40px;
-    border-bottom: 1px solid #e5e7eb;
-    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+    background-color: var(--color-surface);
+    padding: var(--spacing-xl) var(--spacing-2xl);
+    border-bottom: 1px solid var(--color-border);
+    box-shadow: var(--shadow-sm);
     position: sticky;
     top: 0;
     z-index: 10;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--spacing-xs);
 }
 
+.content-header h1,
 .page-title {
-    font-size: 28px;
-    font-weight: 600;
-    color: #111827;
+    font-size: var(--font-size-3xl);
+    font-weight: var(--font-weight-bold);
+    color: var(--color-text-primary);
     margin: 0;
-    letter-spacing: -0.2px;
+    letter-spacing: -0.02em;
+    line-height: var(--line-height-tight);
+}
+
+.content-header p {
+    font-size: var(--font-size-base);
+    color: var(--color-text-secondary);
+    margin: 0;
+    line-height: var(--line-height-normal);
 }
 
 /* Reports Layout - Matching Product List Design */
@@ -150,6 +164,7 @@
     font-weight: 700;
     color: #111827;
     margin-bottom: 4px;
+    line-height: 1.25;
     line-height: 1.2;
     word-break: break-word;
 }
@@ -157,7 +172,8 @@
 .summary-count {
     font-size: 12px;
     color: #9ca3af;
-    font-weight: 500;
+    font-weight: 400;
+    line-height: 1.4;
 }
 
 /* Tabs Container - Matching Product List Tabs */
@@ -686,8 +702,9 @@
         margin-left: 0 !important;
     }
 
+    .content-header,
     .header {
-        padding: 20px 24px;
+        padding: var(--spacing-lg) var(--spacing-xl);
     }
 
     .reports-section {
@@ -844,20 +861,33 @@
 /* Report Pages Styles (Sales Summary, Purchase Order, Inventory) */
 
 .content-header {
-    margin-bottom: 32px;
+    background-color: var(--color-surface);
+    padding: var(--spacing-xl) var(--spacing-2xl);
+    border-bottom: 1px solid var(--color-border);
+    box-shadow: var(--shadow-sm);
+    position: sticky;
+    top: 0;
+    z-index: 10;
     display: flex;
-    align-items: center;
-    gap: 12px;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--spacing-xs);
 }
 
 .content-header h1 {
-    font-size: 28px;
-    font-weight: 700;
-    color: #1f2937;
+    font-size: var(--font-size-3xl);
+    font-weight: var(--font-weight-bold);
+    color: var(--color-text-primary);
     margin: 0;
-    display: flex;
-    align-items: center;
-    gap: 12px;
+    letter-spacing: -0.02em;
+    line-height: var(--line-height-tight);
+}
+
+.content-header p {
+    font-size: var(--font-size-base);
+    color: var(--color-text-secondary);
+    margin: 0;
+    line-height: var(--line-height-normal);
 }
 
 /* Inventory Section */
@@ -1395,30 +1425,37 @@
 .status-badge {
     display: inline-flex;
     align-items: center;
-    padding: 4px 12px;
+    gap: 4px;
+    padding: 4px 8px;
     border-radius: 6px;
     font-size: 11px;
-    font-weight: 600;
+    font-weight: 500;
     text-transform: uppercase;
-    letter-spacing: 0.5px;
+    letter-spacing: 0.05em;
+    border: 1px solid;
+    background-color: transparent;
+    cursor: default;
     white-space: nowrap;
 }
 
 .status-badge.status-pending,
 .status-badge.status-active {
-    background-color: #dbeafe;
-    color: #2563eb;
+    border-color: #a8c0e0;
+    color: #4a6fa5;
+    background-color: transparent;
 }
 
 .status-badge.status-delivered {
-    background-color: #d1fae5;
-    color: #059669;
+    border-color: #9fc7b3;
+    color: #4a8268;
+    background-color: transparent;
 }
 
 .status-badge.status-cancelled,
 .status-badge.status-inactive {
-    background-color: #fee2e2;
-    color: #dc2626;
+    border-color: #d4a5a5;
+    color: #9f5d5d;
+    background-color: transparent;
 }
 
 /* Mobile Card View */
@@ -1585,8 +1622,9 @@
         display: flex;
     }
 
-    .content-header h1 {
-        font-size: 24px;
+    .content-header h1,
+    .page-title {
+        font-size: var(--font-size-2xl);
     }
 
     .report-filters {

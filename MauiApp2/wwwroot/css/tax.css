@@ -447,23 +447,30 @@
    ============================================ */
 
 .status-badge {
-    display: inline-block;
-    padding: var(--spacing-xs) var(--spacing-sm);
+    display: inline-flex;
+    align-items: center;
+    gap: var(--spacing-xs);
+    padding: 4px 8px;
     border-radius: var(--radius-sm);
     font-size: var(--font-size-xs);
-    font-weight: var(--font-weight-semibold);
+    font-weight: var(--font-weight-medium);
     text-transform: uppercase;
     letter-spacing: 0.05em;
+    border: 1px solid;
+    background-color: transparent;
+    cursor: default;
 }
 
 .status-badge.active {
-    background-color: var(--color-success-light);
-    color: #065f46;
+    border-color: #9fc7b3;
+    color: #4a8268;
+    background-color: transparent;
 }
 
 .status-badge.inactive {
-    background-color: var(--color-warning-light);
-    color: #92400e;
+    border-color: #e6c99a;
+    color: #8b6f47;
+    background-color: transparent;
 }
 
 /* ============================================
