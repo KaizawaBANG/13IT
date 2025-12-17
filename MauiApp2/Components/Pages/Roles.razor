@@ -1,10 +1,24 @@
 ﻿@page "/roles"
+@layout MainLayout
 @using Microsoft.AspNetCore.Components.Forms
 @using System.ComponentModel.DataAnnotations
 @inject NavigationManager Navigation
+@inject IAuthService AuthService
 
+<div class="dashboard-wrapper">
+    <Sidebar />
+    <div class="main-content">
+        <div class="content-header">
+            <h1>Roles</h1>
+        </div>
 
-<h3>Roles</h3>
+        <div class="inventory-section">
+            <div class="product-table-container">
+                <p>Roles management functionality coming soon.</p>
+            </div>
+        </div>
+    </div>
+</div>
 
 @code {
 

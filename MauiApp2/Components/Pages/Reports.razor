@@ -15,7 +15,7 @@
 
     <Sidebar />
 
-    <main class="main-content">
+    <div class="main-content">
 
         <!-- Header with Reports title -->
         <div class="content-header">
@@ -40,63 +40,18 @@
 
         }
 
-        @if (!string.IsNullOrEmpty(errorMessage))
-        {
-            <div class="alert alert-error" style="margin: 20px; padding: 15px; background-color: #fee2e2; border: 1px solid #fecaca; border-radius: 8px; color: #991b1b;">
-                <i class="fas fa-exclamation-triangle"></i>
-                <span>@errorMessage</span>
-                <button style="float: right; background: none; border: none; color: #991b1b; cursor: pointer; font-size: 18px;" @onclick="ClearErrorMessage">×</button>
-            </div>
-        }
-
         <div class="reports-section">
-
-            <!-- Summary Cards -->
-            <div class="summary-cards">
-                <div class="summary-card">
-                    <div class="summary-icon sales-icon">
-                        <i class="fas fa-chart-line"></i>
-                    </div>
-                    <div class="summary-content">
-                        <div class="summary-label">Total Sales</div>
-                        <div class="summary-value">₱@(salesReportData != null && salesReportData.Any() ? salesReportData.Sum(s => s.TotalAmount).ToString("N2") : "0.00")</div>
-                        <div class="summary-count">@(salesReportData?.Count ?? 0) transactions</div>
-                    </div>
+            
+            @if (!string.IsNullOrEmpty(errorMessage))
+            {
+                <div class="alert alert-error">
+                    <span class="alert-icon"><i class="fas fa-exclamation-triangle"></i></span>
+                    <span>@errorMessage</span>
+                    <button class="alert-close" @onclick="ClearErrorMessage"><i class="fas fa-times"></i></button>
                 </div>
-                <div class="summary-card">
-                    <div class="summary-icon purchase-icon">
-                        <i class="fas fa-file-invoice-dollar"></i>
-                    </div>
-                    <div class="summary-content">
-                        <div class="summary-label">Purchase Orders</div>
-                        <div class="summary-value">₱@(purchaseOrderReportData != null && purchaseOrderReportData.Any() ? purchaseOrderReportData.Sum(po => po.TotalAmount).ToString("N2") : "0.00")</div>
-                        <div class="summary-count">@(purchaseOrderReportData?.Count ?? 0) orders</div>
-                    </div>
-                </div>
-                <div class="summary-card">
-                    <div class="summary-icon inventory-icon">
-                        <i class="fas fa-warehouse"></i>
-                    </div>
-                    <div class="summary-content">
-                        <div class="summary-label">Inventory Value</div>
-                        <div class="summary-value">₱@(inventoryReportData != null && inventoryReportData.Any() ? inventoryReportData.Sum(i => i.TotalValue).ToString("N2") : "0.00")</div>
-                        <div class="summary-count">@(inventoryReportData?.Count ?? 0) items</div>
-                    </div>
-                </div>
-                <div class="summary-card">
-                    <div class="summary-icon movement-icon">
-                        <i class="fas fa-exchange-alt"></i>
-                    </div>
-                    <div class="summary-content">
-                        <div class="summary-label">Stock Movements</div>
-                        <div class="summary-value">@(stockMovementReportData?.Count ?? 0)</div>
-                        <div class="summary-count">@(stockMovementReportData?.Where(m => m.Quantity > 0).Count() ?? 0) in, @(stockMovementReportData?.Where(m => m.Quantity < 0).Count() ?? 0) out</div>
-                    </div>
-                </div>
-            </div>
+            }
 
             <!-- Tabs Navigation -->
-
             <div class="tabs-container">
 
                 <button class="tab-item @(activeTab == "sales" ? "active" : "")" @onclick="@(() => SetActiveTab("sales"))">
@@ -677,7 +632,7 @@
 
         </div>
 
-    </main>
+    </div>
 
 </div>
 
