@@ -127,14 +127,22 @@
     line-height: var(--line-height-normal);
 }
 
-/* Stock Adjustment Container */
+/* Inventory Section - Standardized */
+.inventory-section {
+    padding: var(--spacing-2xl);
+    max-width: 1800px;
+    margin: 0 auto;
+    box-sizing: border-box;
+}
+
+/* Stock Adjustment Container - Standardized */
 .stock-adjustment-container {
-    padding: 30px 40px;
-    margin: 32px;
-    background: #ffffff;
-    border-radius: 12px;
-    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-    border: 1px solid #e5e7eb;
+    background-color: var(--color-surface);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-md);
+    border: 1px solid var(--color-border);
+    overflow: hidden;
+    padding: var(--spacing-xl);
 }
 
 /* Tab Header */
@@ -815,9 +823,12 @@ textarea.form-control {
         padding: 20px 24px;
     }
     
+    .inventory-section {
+        padding: var(--spacing-lg) var(--spacing-xl);
+    }
+    
     .stock-adjustment-container {
-        padding: 20px 24px;
-        margin: 24px;
+        padding: var(--spacing-lg);
     }
 
     .history-controls {
@@ -875,9 +886,12 @@ textarea.form-control {
         padding: 20px;
     }
 
+    .inventory-section {
+        padding: var(--spacing-md);
+    }
+    
     .stock-adjustment-container {
-        padding: 15px;
-        margin: 15px;
+        padding: var(--spacing-md);
     }
 
     .history-header,

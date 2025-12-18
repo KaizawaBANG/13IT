@@ -40,19 +40,19 @@
 
         }
 
-        <div class="reports-section">
-            
-            @if (!string.IsNullOrEmpty(errorMessage))
-            {
-                <div class="alert alert-error">
-                    <span class="alert-icon"><i class="fas fa-exclamation-triangle"></i></span>
-                    <span>@errorMessage</span>
-                    <button class="alert-close" @onclick="ClearErrorMessage"><i class="fas fa-times"></i></button>
-                </div>
-            }
+        <div class="inventory-section">
+            <div class="product-table-container">
+                @if (!string.IsNullOrEmpty(errorMessage))
+                {
+                    <div class="alert alert-error">
+                        <span class="alert-icon"><i class="fas fa-exclamation-triangle"></i></span>
+                        <span>@errorMessage</span>
+                        <button class="alert-close" @onclick="ClearErrorMessage"><i class="fas fa-times"></i></button>
+                    </div>
+                }
 
-            <!-- Tabs Navigation -->
-            <div class="tabs-container">
+                <!-- Tabs Navigation -->
+                <div class="tabs-container">
 
                 <button class="tab-item @(activeTab == "sales" ? "active" : "")" @onclick="@(() => SetActiveTab("sales"))">
                     <i class="fas fa-chart-line"></i>
@@ -205,10 +205,6 @@
             </div>
 
             <!-- Report Content Container -->
-
-            <div class="report-card">
-
-                <div class="report-content">
 
                     <!-- Sales Report Tab -->
                     @if (activeTab == "sales")
@@ -626,10 +622,7 @@
 
                     }
 
-                </div>
-
             </div>
-
         </div>
 
     </div>

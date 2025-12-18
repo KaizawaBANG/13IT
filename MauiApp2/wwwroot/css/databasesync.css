@@ -135,12 +135,10 @@
 
 /* Inventory Section */
 .inventory-section {
-    background: #ffffff;
-    border-radius: 12px;
-    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-    border: 1px solid #e5e7eb;
-    overflow: hidden;
-    margin: 32px;
+    padding: var(--spacing-2xl);
+    max-width: 1800px;
+    margin: 0 auto;
+    box-sizing: border-box;
 }
 
 /* Tab Section */
@@ -179,7 +177,12 @@
 
 /* Product Table Container */
 .product-table-container {
-    padding: 24px;
+    background-color: var(--color-surface);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-md);
+    border: 1px solid var(--color-border);
+    overflow: hidden;
+    padding: var(--spacing-xl);
 }
 
 /* Alert Messages */
@@ -634,18 +637,26 @@
 /* Responsive Design */
 @media (max-width: 1024px) {
     .main-content {
-        padding: 24px;
+        padding: 0;
+    }
+    
+    .inventory-section {
+        padding: var(--spacing-lg) var(--spacing-xl);
     }
 }
 
 @media (max-width: 768px) {
     .main-content {
         margin-left: 0;
-        padding: 20px;
+        padding: 0;
+    }
+    
+    .inventory-section {
+        padding: var(--spacing-md);
     }
 
     .product-table-container {
-        padding: 16px;
+        padding: var(--spacing-md);
     }
 
     .sync-controls {
@@ -665,7 +676,11 @@
 
 @media (max-width: 480px) {
     .main-content {
-        padding: 16px;
+        padding: 0;
+    }
+    
+    .inventory-section {
+        padding: var(--spacing-md);
     }
 
     .content-header h1 {
